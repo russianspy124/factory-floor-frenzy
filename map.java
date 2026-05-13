@@ -19,6 +19,7 @@ public class map implements KeyListener{
 		double playerX =4,playerY=4;
 		boolean WPressed=false,APressed=false,SPressed=false,DPressed=false;
 		BufferedImage player = loadImage("factory-floor-frenzy\\player.png");
+		//hi nick
 		
 
 		
