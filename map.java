@@ -221,7 +221,7 @@ public void keyTyped(KeyEvent e) {}
 						default:
 							break;
 			}}}
-			g.drawImage(player,this.getWidth()/2-50,this.getHeight()/2-50,100,100,null);
+			g.drawImage(playerSprite,this.getWidth()/2-50,this.getHeight()/2-50,100,100,null);
 			// for(int i =0;i<7;i++){
 			// 	for (int j=0;j<7;j++){
 					// switch (visibleMap[i][j]) {
