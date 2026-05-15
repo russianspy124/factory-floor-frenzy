@@ -6,6 +6,7 @@ class Damageable {
     long stunEnd = 0;
     final int flashDuration=120;
     Damageable(int hp) { this.hp = hp; }
+    
     boolean canTakeDamage() {
         return System.currentTimeMillis() - lastHit > invuln;
     }
