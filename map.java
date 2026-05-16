@@ -19,7 +19,7 @@ public class Map implements KeyListener{
 		int[][] mapArray = new int[mapHeight][mapWidth];
 		double playerX =4,playerY=4;
 		boolean WPressed=false,APressed=false,SPressed=false,DPressed=false;
-		BufferedImage playerImage = loadImage("factory-floor-frenzy\\playerOne.png");
+		BufferedImage playerImage = loadImage("playerOne.png");
 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(new Runnable() {
