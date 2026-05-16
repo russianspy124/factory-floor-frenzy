@@ -19,8 +19,9 @@ public class Map implements KeyListener{
 		int[][] mapArray = new int[mapHeight][mapWidth];
 		double playerX =4,playerY=4;
 		boolean WPressed=false,APressed=false,SPressed=false,DPressed=false;
-		BufferedImage playerImage = loadImage("playerOne.png");
-
+		BufferedImage playerSprite = loadImage("playerOne.png");
+		ArrayList<Enemy> enemies = new ArrayList<Enemy>();
+		
     public static void main(String[] args) {
         SwingUtilities.invokeLater(new Runnable() {
 			public void run() {
@@ -40,6 +41,7 @@ Map(){
 		FileReader in;
 		BufferedReader readFile;
 		String readinvalue;
+		
 		
 		
 
@@ -73,6 +75,7 @@ Map(){
 timer = new Timer(10, new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				move();
+				moveEnemies();
 				panel.repaint();
 				
 
@@ -87,24 +90,29 @@ public void keyPressed(KeyEvent e){
 	  int k = e.getKeyCode();
 		if (k==KeyEvent.VK_W){
 			WPressed=true;
-		// 	if(mapArray[(int)playerX][(int)(playerY-.5)]==1){
-		// playerY-=.1;
-			// }
 		}
 		if (k==KeyEvent.VK_A){
 			APressed=true;
-			// playerX-=.1;
+			
 		}
 			
 		if (k==KeyEvent.VK_S){
 			SPressed=true;
-			// playerY+=.1;
+			
 		}
 			
 		if (k==KeyEvent.VK_D){
 			DPressed=true;
-			// playerX+=.1;
+			
+		
 }
+//Spawns Enemies for testing
+if (k==KeyEvent.VK_8){
+			for (int i = 0; i < 5; i++) {
+				enemies.add(new Enemy(10,Math.random()*mapWidth,Math.random()*mapHeight));
+			}
+			
+		}
 	
 }
 
@@ -154,6 +162,11 @@ public void keyTyped(KeyEvent e) {}
 			}
 	}
 	
+ }
+ void moveEnemies(){
+	for (Enemy enemy : enemies) {
+		enemy.move(playerX,playerY);
+	}
  }
  static BufferedImage loadImage(String filename) {
 	BufferedImage img = null;
@@ -212,25 +225,13 @@ public void keyTyped(KeyEvent e) {}
 						default:
 							break;
 			}}}
-			g.drawImage(playerImage,this.getWidth()/2-50,this.getHeight()/2-50,100,100,null);
-			// for(int i =0;i<7;i++){
-			// 	for (int j=0;j<7;j++){
-					// switch (visibleMap[i][j]) {
-					// 	case 0:
-					// 		break;
-					// 	case 1:
-					// 		g.setColor(floor);
-					// 		g.fillRect((int)((j-playerX%1)*panW/5),(int)((i-playerY%1)*panH/5),panW/5+1,panH/5+1);
-					// 		break;
-					// 	case 2:
-					// 		g.setColor(wall);
-					// 		g.fillRect((int)((j-playerX%1)*panW/5),(int)((i-playerY%1)*panH/5),panW/5+1,panH/+1);
-					
-					// 	default:
-					// 		break;
-					
-					
-				// }}}
+			g.drawImage(playerSprite,this.getWidth()/2,this.getHeight()/2,100,100,null);
+			g.setColor(Color.green);
+			for (Enemy enemy: enemies) {
+				 g.fillOval((int)((enemy.x-playerX+tilesX/2)*tileSize),(int)((enemy.y-playerY+(tilesY/2))*tileSize),50,50);
+			}
+			
+		
 			this.setPreferredSize(new Dimension(panW, panH));
 		}
 
