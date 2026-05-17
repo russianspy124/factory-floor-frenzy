@@ -15,12 +15,14 @@ public class Map implements KeyListener{
         JFrame window;
         DrawPanel panel;
         Timer timer;
-		int mapWidth=15,mapHeight=9,tileSize=100,tilesX,tilesY;
+		int mapWidth=15,mapHeight=9,tileSize=100,tilesX,tilesY,attackCooldown, attackHoldCounter=0;
+		int weaponchoice =0; //0 - rapier, 1 - scythe, 2 - disc 
 		int[][] mapArray = new int[mapHeight][mapWidth];
 		double playerX =4,playerY=4;
-		boolean WPressed=false,APressed=false,SPressed=false,DPressed=false;
+		boolean WPressed=false,APressed=false,SPressed=false,DPressed=false,attackHeld;
 		BufferedImage playerSprite = loadImage("playerOne.png");
 		ArrayList<Enemy> enemies = new ArrayList<Enemy>();
+		ArrayList<Projectile> projectiles = new ArrayList<Projectile>();
 		
     public static void main(String[] args) {
         SwingUtilities.invokeLater(new Runnable() {
@@ -76,11 +78,17 @@ timer = new Timer(10, new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				move();
 				moveEnemies();
+				if (attackCooldown>0){
+					attackCooldown--;
+				}
+				
+				if(attackHeld){
+					attackHoldCounter++;
+				}
+				checkProjectileLifespan();
+				moveProjectiles();
 				panel.repaint();
-				
 
-				
-				
 			}
 		});
 		timer.start();
@@ -103,16 +111,24 @@ public void keyPressed(KeyEvent e){
 			
 		if (k==KeyEvent.VK_D){
 			DPressed=true;
-			
-		
 }
-//Spawns Enemies for testing
-if (k==KeyEvent.VK_8){
+		//Spawns Enemies for testing
+		if (k==KeyEvent.VK_8){
 			for (int i = 0; i < 5; i++) {
 				enemies.add(new Enemy(10,Math.random()*mapWidth,Math.random()*mapHeight));
 			}
-			
+}
+		if (k==KeyEvent.VK_V){
+			if (attackCooldown<0){
+				attackHeld=true;
+			}
 		}
+		// //Switches Weapon,  0 - rapier, 1 - scythe, 2 - disc 
+		// if (k==KeyEvent.VK_C){
+		// 	weaponchoice++;
+		// 	weaponchoice=weaponchoice%3;
+		// }
+
 	
 }
 
@@ -135,29 +151,35 @@ public void keyTyped(KeyEvent e) {}
 			
 		if (k==KeyEvent.VK_D){
 			DPressed=false;
-			
-}
+		}
+		if (k==KeyEvent.VK_V&&attackHeld){
+			if (attackCooldown==0){
+				attack(attackHoldCounter>300);
+				attackHeld=false;
+				attackHoldCounter=0;
+			}
+			}
 	}
 
- void move(){
+ void move(){ //checks collisions then moves player
 	if(WPressed){
-		if(mapArray[(int)(playerY-.3)][(int)(playerX)]==1){
+		if(mapArray[(int)(playerY)][(int)(playerX)]==1){
 			playerY-=.1;
 			}
 		}
 	if(APressed){
-		if(mapArray[(int)(playerY)][(int)(playerX-.9)]==1){
+		if(mapArray[(int)(playerY+.3)][(int)(playerX-.4)]==1){
 			playerX-=.1;
 			}
 	}
 	if(SPressed){
-		if(mapArray[(int)(playerY+.1)][(int)(playerX)]==1){
+		if(mapArray[(int)(playerY+1.1)][(int)(playerX)]==1){
 			playerY+=.1;
 			}
 		
 	}
 	if(DPressed){
-		if(mapArray[(int)(playerY)][(int)(playerX+.1)]==1){
+		if(mapArray[(int)(playerY+.3)][(int)(playerX+0.8)]==1){
 			playerX+=.1;
 			}
 	}
@@ -181,11 +203,47 @@ public void keyTyped(KeyEvent e) {}
 	//else System.out.printf("w=%d, h=%d%n",img.getWidth(), img.getHeight());
 	return img;
 }
+void attack(boolean heavy){ //0 - rapier, 1 - scythe, 2 - disc 
+	Enemy closest=enemies.get(0);
+	double closestdist=100;
+	System.out.println("attacked");
+	for (Enemy enemy : enemies) {
+		if (enemy.dist<closestdist){
+			closestdist=enemy.dist;
+			closest = enemy;
+		}
+	}
+	if(weaponchoice==0){//rapier
+		projectiles.add(new Projectile((closest.x-playerX)/closestdist,(closest.y-playerY)/closestdist));
+		attackCooldown=100;
+
+	}
+	if(weaponchoice==1){//scythe
+
+	}
+	if(weaponchoice==2){//disc
+
+	}
+
+}
+void moveProjectiles(){
+	for (Projectile projectile : projectiles) {
+		projectile.extend();
+	}
+}
+void checkProjectileLifespan(){
+	for (Projectile projectile : projectiles) {
+		if (projectile.lifespan<0){
+			projectiles.remove(projectile);
+		}
+	}
+}
 
  class DrawPanel extends JPanel {
             int panW, panH;
 			Color wall = new Color(199, 93, 72);
 			Color floor = new Color(138, 65, 51);
+			Color heavy = new Color(255,255,255,100);
 			
 		DrawPanel() {
 			panW = 800;
@@ -225,7 +283,20 @@ public void keyTyped(KeyEvent e) {}
 						default:
 							break;
 			}}}
-			g.drawImage(playerSprite,this.getWidth()/2,this.getHeight()/2,100,100,null);
+			if(attackHoldCounter>300){
+				g.setColor(heavy);
+			g.fillOval(this.getWidth()/2,this.getHeight()/2,100,100);
+			}
+			 g.drawImage(playerSprite,this.getWidth()/2-50,this.getHeight()/2-50,100,100,null);
+			 g.setColor(Color.red);
+			 for (Projectile projectile : projectiles) {
+				Polygon p = new Polygon();
+				p.addPoint(this.getWidth()/2,this.getHeight()/2);
+				p.addPoint((int)((projectile.x-projectile.vy)*25)+this.getWidth()/2,(int)((projectile.y+projectile.vx)*25)+this.getHeight()/2);
+				p.addPoint((int)((projectile.x+projectile.vy)*25)+this.getWidth()/2,(int)((projectile.y-projectile.vx)*25)+this.getHeight()/2);
+				g.drawPolygon(p);
+			 }
+			
 			g.setColor(Color.green);
 			for (Enemy enemy: enemies) {
 				 g.fillOval((int)((enemy.x-playerX+tilesX/2)*tileSize),(int)((enemy.y-playerY+(tilesY/2))*tileSize),50,50);
