@@ -10,7 +10,8 @@ import java.io.FileReader;
 import java.io.IOException;
 
 import javax.swing.*;
-public class map implements KeyListener{
+
+public class Map implements KeyListener{
         JFrame window;
         DrawPanel panel;
         Timer timer;
@@ -18,30 +19,20 @@ public class map implements KeyListener{
 		int[][] mapArray = new int[mapHeight][mapWidth];
 		double playerX =4,playerY=4;
 		boolean WPressed=false,APressed=false,SPressed=false,DPressed=false;
-		BufferedImage playerSprite = loadImage("factory-floor-frenzy\\player.png");
+		BufferedImage playerImage = loadImage("factory-floor-frenzy\\playerOne.png");
 		ArrayList<Enemy> enemies = new ArrayList<Enemy>();
-
-		
-
-		
-		// int[][] visibleMap = new int[7][7];
-		
-		
-		
-
-
 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(new Runnable() {
 			public void run() {
-				new map();
+				new Map();
 			}
     });
 }
     
 
 
-map(){
+Map(){
      window = new JFrame("MAP");
         window.setSize(200,200);
         window.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
