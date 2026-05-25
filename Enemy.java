@@ -14,10 +14,10 @@ class Enemy extends Damageable {
     }
 
     void move(double playerX, double playerY) {
-        double dist = Math.pow(playerX - this.x, 2) + Math.pow(playerY - this.y, 2);
+        double dist = Math.pow((playerX - this.x), 2) + Math.pow((playerY - this.y), 2);
         this.dist = Math.sqrt(dist);
-        this.x += ((playerX - this.x) / dist * MOVESPEED);
-        this.y += ((playerY - this.y) / dist * MOVESPEED);
+        this.x += ((playerX - this.x) / this.dist * MOVESPEED);
+        this.y += ((playerY - this.y) / this.dist * MOVESPEED);
         this.hitbox.setPosition(this.x - 25, this.y - 25);
 
     }

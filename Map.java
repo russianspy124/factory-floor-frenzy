@@ -15,6 +15,7 @@ public class Map implements KeyListener {
     Timer timer;
     int mapWidth = 15, mapHeight = 9, tileSize = 100, tilesX, tilesY, attackCooldown, attackHoldCounter = 0;
     int weaponchoice = 0; //0 - rapier, 1 - scythe, 2 - disc
+    int difficultyValue=0,roomDifficulty=50;
     int[][] mapArray = new int[mapHeight][mapWidth];
     double playerX = 4, playerY = 4;
     boolean WPressed = false, APressed = false, SPressed = false, DPressed = false, attackHeld;
@@ -60,7 +61,7 @@ public class Map implements KeyListener {
             }
             readFile.close();
             in.close();
-            System.out.println("mapArray created");
+            
         } catch (Exception e) {
             System.out.println("An error has occured loading the map from file");
         }
@@ -112,11 +113,10 @@ public class Map implements KeyListener {
         //Spawns Enemies for testing
         if (k == KeyEvent.VK_8) {
             for (int i = 0; i < 1; i++) {
-                enemies.add(new Enemy(100, Math.random() * mapWidth, Math.random() * mapHeight));
+                enemies.add(new Enemy(10, Math.random() * mapWidth, Math.random() * mapHeight));
             }
         }
         if (k == KeyEvent.VK_V) {
-            System.out.println("Hello");
             if (attackCooldown <= 0) {
                 attackHeld = true;
             }
@@ -190,6 +190,17 @@ public class Map implements KeyListener {
             enemy.move(playerX, playerY);
         }
     }
+    void spawnEnemies(){
+        if (difficultyValue<15){//once there are fewer than a certain amount of enemies in a room, will spawn next wave
+            while(difficultyValue<30&&roomDifficulty>0){//spawns wave until room runs out of enemies to spawn or max difficulty is reached
+                //TODO: refactor when new enemy types are coded
+                enemies.add(new Enemy(10, Math.random() * mapWidth, Math.random() * mapHeight));
+                System.out.println("Enemy spawned");
+                difficultyValue+=3;
+                roomDifficulty-=3;
+            }
+        }
+    }
 
     void removeDeadEnemies() {
         for (int i = enemies.size() - 1; i >= 0; i--) {
@@ -244,7 +255,7 @@ public class Map implements KeyListener {
         for (Projectile projectile : projectiles) {
             System.out.println("projectile moved");
             projectile.extend();
-            System.out.println(projectile.lifespan);
+            // System.out.println(projectile.lifespan);
         }
     }
 
