@@ -1,4 +1,4 @@
-class Player extends Damageable{
+class Player extends Damageable {
     double x, y;
     double kbX = 0, kbY = 0;
 
