@@ -23,6 +23,10 @@ public class Map implements KeyListener {
     ArrayList<Enemy> enemies = new ArrayList<Enemy>();
     ArrayList<Projectile> projectiles = new ArrayList<Projectile>();
 
+    // Pause menu
+    JFrame pauseWindow;
+    boolean paused = false;
+    
     public static void main(String[] args) {
         SwingUtilities.invokeLater(new Runnable() {
             public void run() {
@@ -47,6 +51,7 @@ public class Map implements KeyListener {
         window.setExtendedState(JFrame.MAXIMIZED_BOTH);
         window.add(panel);
         window.setVisible(true);
+        window.requestFocus();
         try {
             in = new FileReader(mapFile);
             readFile = new BufferedReader(in);
@@ -91,9 +96,81 @@ public class Map implements KeyListener {
         timer.start();
     }
 
+    private void openPauseMenu() {
+
+    if (paused) {
+        return;
+    }
+
+    paused = true;
+    timer.stop();
+
+    // Prevent stuck movement keys after resuming
+    WPressed = false;
+    APressed = false;
+    SPressed = false;
+    DPressed = false;
+
+    pauseWindow = new JFrame("Paused");
+    pauseWindow.setSize(300, 150);
+    pauseWindow.setLocationRelativeTo(window);
+    pauseWindow.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+
+    JLabel label = new JLabel(
+        "<html><center>P - Resume Game<br><br>O - Exit Game</center></html>",
+        SwingConstants.CENTER
+    );
+
+    pauseWindow.add(label);
+
+    pauseWindow.addKeyListener(new KeyAdapter() {
+        @Override
+        public void keyPressed(KeyEvent e) {
+
+            int k = e.getKeyCode();
+
+            if (k == KeyEvent.VK_P) {
+
+                paused = false;
+
+                timer.start();
+
+                pauseWindow.dispose();
+
+                // Return keyboard focus to the game window
+                window.requestFocus();
+            }
+
+            if (k == KeyEvent.VK_O) {
+
+                System.exit(0);
+            }
+        }
+    });
+
+    pauseWindow.addWindowListener(new WindowAdapter() {
+        @Override
+        public void windowOpened(WindowEvent e) {
+            pauseWindow.requestFocusInWindow();
+        }
+    });
+
+    pauseWindow.setFocusable(true);
+    pauseWindow.setVisible(true);
+    pauseWindow.toFront();
+    pauseWindow.requestFocusInWindow();
+}
+    
     @Override
     public void keyPressed(KeyEvent e) {
         int k = e.getKeyCode();
+
+        // Pause menu
+        if (k == KeyEvent.VK_P) {
+        openPauseMenu();
+        return;
+        }
+        
         if (k == KeyEvent.VK_W) {
             WPressed = true;
         }
@@ -160,6 +237,8 @@ public class Map implements KeyListener {
         }
     }
 
+    
+    
     void move() { //checks collisions then moves player
         if (WPressed) {
             if (mapArray[(int) (playerY)][(int) (playerX)] == 1) {
