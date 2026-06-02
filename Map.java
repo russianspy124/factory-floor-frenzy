@@ -269,9 +269,10 @@ public class Map implements KeyListener {
 
     void moveEnemies() {
         for (Enemy enemy : enemies) {
-            enemy.move(playerX, playerY);
+            enemy.move(playerX, playerY, enemies);
         }
     }
+    
     void checkEnemyCollision(){
         if(iFrames>0){
             iFrames--;
