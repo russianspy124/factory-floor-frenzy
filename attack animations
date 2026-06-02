@@ -3,6 +3,7 @@
  * - Swing attack animation
  * - Stab attack animation
  * - Thrown weapon animation
+ * - Thrown weapon should come back to player, have to rework that
  */
 
 import java.awt.*;
