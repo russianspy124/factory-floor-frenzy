@@ -15,13 +15,15 @@ public class Map implements KeyListener {
     Timer timer;
     int mapWidth = 15, mapHeight = 9, tileSize = 100, tilesX, tilesY, attackCooldown, attackHoldCounter = 0;
     int weaponchoice = 0; //0 - rapier, 1 - scythe, 2 - disc
-    int difficultyValue=0,roomDifficulty=50;
+    int difficultyValue=0,roomDifficulty=50, iFrames=0;
     int[][] mapArray = new int[mapHeight][mapWidth];
     double playerX = 4, playerY = 4;
     boolean WPressed = false, APressed = false, SPressed = false, DPressed = false, attackHeld;
     BufferedImage playerSprite = loadImage("playerOne.png");
     ArrayList<Enemy> enemies = new ArrayList<Enemy>();
     ArrayList<Projectile> projectiles = new ArrayList<Projectile>();
+    Player player = new Player(100);
+    
 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(new Runnable() {
@@ -71,6 +73,7 @@ public class Map implements KeyListener {
             public void actionPerformed(ActionEvent e) {
                 move();
                 moveEnemies();
+                checkEnemyCollision();
                 if (attackCooldown > 0) {
                     attackCooldown--;
                 }
@@ -81,7 +84,7 @@ public class Map implements KeyListener {
                 checkProjectileHits();
                 checkProjectileLifespan();
                 moveProjectiles();
-
+                spawnEnemies();
                 removeDeadEnemies();
 
                 panel.repaint();
@@ -189,6 +192,19 @@ public class Map implements KeyListener {
         for (Enemy enemy : enemies) {
             enemy.move(playerX, playerY);
         }
+    }
+    void checkEnemyCollision(){
+        if(iFrames>0){
+            iFrames--;
+        }else{
+             for (Enemy enemy : enemies) {
+            if (enemy.dist<=0.2){
+                iFrames+=50;
+                player.takeDamage((int)enemy.damage);
+            }
+        }
+        }
+       
     }
     void spawnEnemies(){
         if (difficultyValue<15){//once there are fewer than a certain amount of enemies in a room, will spawn next wave

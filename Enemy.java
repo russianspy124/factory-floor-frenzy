@@ -3,6 +3,7 @@ class Enemy extends Damageable {
     double kbX = 0, kbY = 0;
     double MOVESPEED = 0.075;
     double dist;
+    double damage = 10;
 
     Hitbox hitbox = new Hitbox(x, y, 100, 100);
 //    Damageable hp = new Damageable(50);
