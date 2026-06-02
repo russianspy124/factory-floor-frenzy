@@ -11,7 +11,6 @@ import java.awt.geom.AffineTransform;
 import java.util.ArrayList;
 
 public class AttackAnimations {
-
     /* =========================================================
      * PLAYER REFERENCE
      * ========================================================= */

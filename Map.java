@@ -196,18 +196,34 @@ public class Map implements KeyListener {
                 enemies.add(new Enemy(10, Math.random() * mapWidth, Math.random() * mapHeight));
             }
         }
-        if (k == KeyEvent.VK_V) {
+        if (k == KeyEvent.VK_J) {
+//            Attack
             if (attackCooldown <= 0) {
                 attackHeld = true;
             }
         }
-        // //Switches Weapon,  0 - rapier, 1 - scythe, 2 - disc
-        // if (k==KeyEvent.VK_C){
-        // 	weaponchoice++;
-        // 	weaponchoice=weaponchoice%3;
-        // }
+        if (k == KeyEvent.VK_K) {
+//            TODO: Dash
 
+        }
+        if (k == KeyEvent.VK_L) {
+            // TODO: switches Weapon,  0 - rapier, 1 - scythe, 2 - disc
+            // 	weaponchoice++;
+            // 	weaponchoice=weaponchoice%3;
 
+        }
+        if (k == KeyEvent.VK_U) {
+//            TODO: Pickup
+
+        }
+        if (k == KeyEvent.VK_I) {
+//            TODO: Unbinded
+
+        }
+        if (k == KeyEvent.VK_O) {
+//            TODO: Escape
+
+        }
     }
 
     public void keyTyped(KeyEvent e) {
