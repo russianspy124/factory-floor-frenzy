@@ -1,30 +1,40 @@
 class Projectile {
-    double x, y, vx, vy, rotation;
-    double spawnX, spawnY;
-    int size = 40, lifespan = 60;
-    boolean isDisc = false;
 
-    // Rapier projectile
-    Projectile(double startX, double startY, double vx, double vy) {
-        this.x = startX;
-        this.y = startY;
-        this.spawnX = startX;
-        this.spawnY = startY;
+    double x, y;
+    double vx, vy;
+    double spawnX, spawnY;
+    double rotation = 0;
+    int lifespan = 60;
+    boolean isDisc;
+
+    // Rapier bolt — removed by lifespan and max distance
+    Projectile(double x, double y, double vx, double vy) {
+        this.x = x;
+        this.y = y;
+        this.spawnX = x;
+        this.spawnY = y;
         this.vx = vx;
         this.vy = vy;
+        this.isDisc = false;
     }
 
-    // Disc projectile — higher speed, no lifespan (removed by distance instead)
-    Projectile(double startX, double startY, double vx, double vy, boolean isDisc) {
-        this(startX, startY, vx, vy);
+    // Disc — removed by distance only, so lifespan is set to max
+    Projectile(double x, double y, double vx, double vy, boolean isDisc) {
+        this(x, y, vx, vy);
         this.isDisc = isDisc;
-        if (isDisc) lifespan = Integer.MAX_VALUE; // distance-based removal instead
+        if (isDisc) lifespan = Integer.MAX_VALUE;
     }
 
-    void extend() {
+    void move() {
         x += vx;
         y += vy;
         rotation += 0.3;
         if (!isDisc) lifespan--;
+    }
+
+    double distanceTravelled() {
+        double dx = x - spawnX;
+        double dy = y - spawnY;
+        return Math.sqrt(dx * dx + dy * dy);
     }
 }

@@ -3,62 +3,55 @@ import java.util.ArrayList;
 class Enemy extends Damageable {
 
     double x, y;
+    double distToPlayer;
 
-    double kbX = 0, kbY = 0;
+    private static final double MOVE_SPEED = 0.075;
+    private static final double MIN_SPACING = 0.5;   // world units — enemies won't overlap closer than this
+    private static final double CONTACT_DIST = 0.2;   // world units — close enough to damage the player
+    static final double DAMAGE = 10;
 
-    double MOVESPEED = 0.075;
-
-    double dist;
-
-    double damage = 10;
-
-    Hitbox hitbox = new Hitbox(x, y, 100, 100);
+    Hitbox hitbox = new Hitbox(0, 0, 100, 100);
 
     Enemy(int hp, double x, double y) {
-
         super(hp);
-
         this.x = x;
-
         this.y = y;
     }
 
-    void move(double playerX, double playerY, ArrayList<Enemy> enemies) {
+    void move(double playerX, double playerY, ArrayList<Enemy> allEnemies) {
+        moveTowardPlayer(playerX, playerY);
+        separateFromOtherEnemies(allEnemies);
+        hitbox.setPosition(x - 25, y - 25);
+    }
 
-        // Move toward player
-        double distSq = Math.pow(playerX - this.x, 2)
-                + Math.pow(playerY - this.y, 2);
+    boolean isTouchingPlayer() {
+        return distToPlayer <= CONTACT_DIST;
+    }
 
-        this.dist = Math.sqrt(distSq);
+    private void moveTowardPlayer(double playerX, double playerY) {
+        double dx = playerX - x;
+        double dy = playerY - y;
+        distToPlayer = Math.sqrt(dx * dx + dy * dy);
 
-        if (this.dist > 0) {
-            this.x += ((playerX - this.x) / this.dist * MOVESPEED);
-            this.y += ((playerY - this.y) / this.dist * MOVESPEED);
+        if (distToPlayer > 0) {
+            x += (dx / distToPlayer) * MOVE_SPEED;
+            y += (dy / distToPlayer) * MOVE_SPEED;
         }
+    }
 
-        // Prevent enemies from overlapping
-        double minDistance = 0.5;
+    private void separateFromOtherEnemies(ArrayList<Enemy> allEnemies) {
+        for (Enemy other : allEnemies) {
+            if (other == this) continue;
 
-        for (Enemy enemy : enemies) {
+            double dx = x - other.x;
+            double dy = y - other.y;
+            double dist = Math.sqrt(dx * dx + dy * dy);
 
-            if (enemy == this) {
-                continue;
-            }
-
-            double dx = this.x - enemy.x;
-            double dy = this.y - enemy.y;
-
-            double separation = Math.sqrt(dx * dx + dy * dy);
-
-            if (separation > 0 && separation < minDistance) {
-
-                double overlap = minDistance - separation;
-
-                this.x += (dx / separation) * overlap * 0.5;
-                this.y += (dy / separation) * overlap * 0.5;
+            if (dist > 0 && dist < MIN_SPACING) {
+                double overlap = MIN_SPACING - dist;
+                x += (dx / dist) * overlap * 0.5;
+                y += (dy / dist) * overlap * 0.5;
             }
         }
-
-        this.hitbox.setPosition(this.x - 25, this.y - 25);
     }
 }

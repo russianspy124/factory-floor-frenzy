@@ -1,26 +1,27 @@
 import java.awt.*;
 
 class Hitbox {
-    double x, y;
-    int w, h;
 
-    Hitbox(double x, double y, int w, int h) {
+    double x, y;
+    int width, height;
+
+    Hitbox(double x, double y, int width, int height) {
         this.x = x;
         this.y = y;
-        this.w = w;
-        this.h = h;
-    }
-
-    Rectangle getRect() {
-        return new Rectangle((int) x, (int) y, w, h);
-    }
-
-    boolean intersects(Hitbox other) {
-        return getRect().intersects(other.getRect());
+        this.width = width;
+        this.height = height;
     }
 
     void setPosition(double x, double y) {
         this.x = x;
         this.y = y;
+    }
+
+    boolean intersects(Hitbox other) {
+        return toRect().intersects(other.toRect());
+    }
+
+    private Rectangle toRect() {
+        return new Rectangle((int) x, (int) y, width, height);
     }
 }

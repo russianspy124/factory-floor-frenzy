@@ -1,11 +1,14 @@
 class Damageable {
+
     int hp;
     int maxHp;
-    long lastHit = 0;
-    int invuln = 500;
-    int stunDuration = 120;
-    long stunEnd = 0;
-    final int flashDuration = 120;
+
+    private long lastHitTime = 0;
+    private long stunEndTime = 0;
+
+    private static final int INVULN_MS = 500;
+    private static final int STUN_MS = 120;
+    private static final int FLASH_MS = 120;
 
     Damageable(int hp) {
         this.hp = hp;
@@ -13,23 +16,23 @@ class Damageable {
     }
 
     boolean canTakeDamage() {
-        return System.currentTimeMillis() - lastHit > invuln;
+        return System.currentTimeMillis() - lastHitTime > INVULN_MS;
     }
 
-    void takeDamage(int dmg) {
-        long now = System.currentTimeMillis();
+    void takeDamage(int amount) {
         if (!canTakeDamage()) return;
-        hp -= dmg;
-        lastHit = now;
-        stunEnd = now + stunDuration;
+        long now = System.currentTimeMillis();
+        hp -= amount;
+        lastHitTime = now;
+        stunEndTime = now + STUN_MS;
     }
 
     boolean isStunned() {
-        return System.currentTimeMillis() < stunEnd;
+        return System.currentTimeMillis() < stunEndTime;
     }
 
     boolean isFlashing() {
-        return System.currentTimeMillis() - lastHit < flashDuration;
+        return System.currentTimeMillis() - lastHitTime < FLASH_MS;
     }
 
     boolean alive() {

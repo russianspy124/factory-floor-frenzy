@@ -11,127 +11,170 @@ import java.io.FileReader;
 import java.io.IOException;
 
 public class Map implements KeyListener {
+
+    // --- Map layout ---
+    static final int MAP_WIDTH = 15;
+    static final int MAP_HEIGHT = 9;
+    static final int TILE_SIZE = 100;
+    int[][] mapGrid = new int[MAP_HEIGHT][MAP_WIDTH];
+
+    // --- Difficulty / spawning ---
+    int activeDifficulty = 0;
+    int remainingDifficulty = 50;
+    static final int SPAWN_THRESHOLD = 15; // spawn a new wave when enemy count drops below this
+    static final int MAX_DIFFICULTY = 30;
+    static final int ENEMY_COST = 3;
+
+    // --- Core objects ---
+    Player player = new Player(100);
+    ArrayList<Enemy> enemies = new ArrayList<>();
+    BufferedImage playerSprite = loadImage("playerOne.png");
+
+    // --- Input state ---
+    boolean upHeld, leftHeld, downHeld, rightHeld;
+
+    // --- Window ---
     JFrame window;
     DrawPanel panel;
-    Timer timer;
-    int mapWidth = 15, mapHeight = 9, tileSize = 100, tilesX, tilesY;
-    int difficultyValue = 0, roomDifficulty = 50;
-    int[][] mapArray = new int[mapHeight][mapWidth];
-    boolean WPressed = false, APressed = false, SPressed = false, DPressed = false;
-    BufferedImage playerSprite = loadImage("playerOne.png");
-    ArrayList<Enemy> enemies = new ArrayList<Enemy>();
-    Player player = new Player(100);
+    Timer gameLoop;
 
-    // Pause menu
+    // --- Pause ---
     JFrame pauseWindow;
     boolean paused = false;
 
+    // -------------------------------------------------------------------------
+
     public static void main(String[] args) {
-        SwingUtilities.invokeLater(new Runnable() {
-            public void run() {
-                new Map();
-            }
-        });
+        SwingUtilities.invokeLater(Map::new);
     }
 
     Map() {
-        window = new JFrame("MAP");
-        window.setSize(200, 200);
-        window.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        window.addKeyListener(this);
-        File mapFile = new File("sampleMap.txt");
-        FileReader in;
-        BufferedReader readFile;
-        String readinvalue;
+        loadMap("sampleMap.txt");
 
-        panel = new DrawPanel();
-        window.setExtendedState(JFrame.MAXIMIZED_BOTH);
-        window.add(panel);
-        window.setVisible(true);
-        window.requestFocus();
-        try {
-            in = new FileReader(mapFile);
-            readFile = new BufferedReader(in);
-            for (int i = 0; i < mapHeight; i++) {
-                readinvalue = readFile.readLine();
-                System.out.println(readinvalue);
-                for (int j = 0; j < mapWidth; j++) {
-                    mapArray[i][j] = Integer.parseInt(readinvalue.substring(j, j + 1));
-                }
-            }
-            readFile.close();
-            in.close();
-        } catch (Exception e) {
-            System.out.println("An error has occured loading the map from file");
-        }
-
-        // Set player starting position
         player.x = 4;
         player.y = 4;
 
-        timer = new Timer(10, new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                player.tickDash(mapArray);
-                if (!player.dashing) {
-                    player.move(WPressed, APressed, SPressed, DPressed, mapArray);
-                }
-                moveEnemies();
-                player.checkEnemyCollision(enemies);
-                int curTilesX = panel.getWidth() / tileSize + 1;
-                int curTilesY = panel.getHeight() / tileSize + 1;
-                player.tickAttack(enemies, tileSize, curTilesX, curTilesY);
-                player.moveProjectiles();
-                player.checkProjectileHits(enemies);
-                player.checkProjectileLifespan();
-                spawnEnemies();
-                removeDeadEnemies();
-                if (!player.alive()) timer.stop();
-                panel.repaint();
-            }
-        });
-        timer.start();
+        window = new JFrame("Factory Floor Frenzy");
+        window.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        window.addKeyListener(this);
+        window.setExtendedState(JFrame.MAXIMIZED_BOTH);
+
+        panel = new DrawPanel();
+        window.add(panel);
+        window.setVisible(true);
+        window.requestFocus();
+
+        gameLoop = new Timer(10, e -> tick());
+        gameLoop.start();
     }
 
-    private void openPauseMenu() {
-        if (paused) {
-            return;
+    // -------------------------------------------------------------------------
+    // Game loop
+    // -------------------------------------------------------------------------
+
+    private void tick() {
+        player.tickDash(mapGrid);
+        if (!player.dashing) player.move(upHeld, leftHeld, downHeld, rightHeld, mapGrid);
+
+        for (Enemy enemy : enemies) enemy.move(player.x, player.y, enemies);
+
+        player.checkEnemyCollision(enemies);
+
+        int visibleTilesX = panel.getWidth() / TILE_SIZE + 1;
+        int visibleTilesY = panel.getHeight() / TILE_SIZE + 1;
+        player.tickAttack(enemies, TILE_SIZE, visibleTilesX, visibleTilesY);
+
+        player.moveProjectiles();
+        player.checkProjectileHits(enemies);
+        player.removeExpiredProjectiles();
+
+        spawnEnemies();
+        removeDeadEnemies();
+
+        if (!player.alive()) gameLoop.stop();
+        panel.repaint();
+    }
+
+    // -------------------------------------------------------------------------
+    // Enemy spawning
+    // -------------------------------------------------------------------------
+
+    private void spawnEnemies() {
+        if (activeDifficulty >= SPAWN_THRESHOLD) return;
+        while (activeDifficulty < MAX_DIFFICULTY && remainingDifficulty > 0) {
+            enemies.add(new Enemy(10, Math.random() * MAP_WIDTH, Math.random() * MAP_HEIGHT));
+            activeDifficulty += ENEMY_COST;
+            remainingDifficulty -= ENEMY_COST;
         }
+    }
+
+    private void removeDeadEnemies() {
+        for (int i = enemies.size() - 1; i >= 0; i--) {
+            if (!enemies.get(i).alive()) {
+                activeDifficulty -= ENEMY_COST;
+                enemies.remove(i);
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Map loading
+    // -------------------------------------------------------------------------
+
+    private void loadMap(String filename) {
+        try (BufferedReader reader = new BufferedReader(new FileReader(filename))) {
+            for (int row = 0; row < MAP_HEIGHT; row++) {
+                String line = reader.readLine();
+                for (int col = 0; col < MAP_WIDTH; col++) {
+                    mapGrid[row][col] = Character.getNumericValue(line.charAt(col));
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to load map: " + e.getMessage());
+        }
+    }
+
+    private static BufferedImage loadImage(String filename) {
+        try {
+            return ImageIO.read(new File(filename));
+        } catch (IOException e) {
+            JOptionPane.showMessageDialog(null, "Failed to load image: " + filename, "Error", JOptionPane.ERROR_MESSAGE);
+            return null;
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Pause menu
+    // -------------------------------------------------------------------------
+
+    private void openPauseMenu() {
+        if (paused) return;
 
         paused = true;
-        timer.stop();
-
-        // Prevent stuck movement keys after resuming
-        WPressed = false;
-        APressed = false;
-        SPressed = false;
-        DPressed = false;
+        gameLoop.stop();
+        upHeld = leftHeld = downHeld = rightHeld = false;
 
         pauseWindow = new JFrame("Paused");
         pauseWindow.setSize(300, 150);
         pauseWindow.setLocationRelativeTo(window);
         pauseWindow.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
 
-        JLabel label = new JLabel(
-            "<html><center>P - Resume Game<br><br>O - Exit Game</center></html>",
-            SwingConstants.CENTER
+        JLabel hint = new JLabel(
+                "<html><center>P — Resume<br><br>O — Quit</center></html>",
+                SwingConstants.CENTER
         );
-
-        pauseWindow.add(label);
+        pauseWindow.add(hint);
 
         pauseWindow.addKeyListener(new KeyAdapter() {
             @Override
             public void keyPressed(KeyEvent e) {
-                int k = e.getKeyCode();
-                if (k == KeyEvent.VK_P) {
+                if (e.getKeyCode() == KeyEvent.VK_P) {
                     paused = false;
-                    timer.start();
+                    gameLoop.start();
                     pauseWindow.dispose();
-                    // Return keyboard focus to the game window
                     window.requestFocus();
                 }
-                if (k == KeyEvent.VK_O) {
-                    System.exit(0);
-                }
+                if (e.getKeyCode() == KeyEvent.VK_O) System.exit(0);
             }
         });
 
@@ -148,286 +191,257 @@ public class Map implements KeyListener {
         pauseWindow.requestFocusInWindow();
     }
 
+    // -------------------------------------------------------------------------
+    // Input
+    // -------------------------------------------------------------------------
+
     @Override
     public void keyPressed(KeyEvent e) {
-        int k = e.getKeyCode();
-
-        // Pause menu
-        if (k == KeyEvent.VK_P) {
-            openPauseMenu();
-            return;
-        }
-
-        if (k == KeyEvent.VK_W) {
-            WPressed = true;
-        }
-        if (k == KeyEvent.VK_A) {
-            APressed = true;
-        }
-        if (k == KeyEvent.VK_S) {
-            SPressed = true;
-        }
-        if (k == KeyEvent.VK_D) {
-            DPressed = true;
-        }
-        // Spawns enemies for testing
-        if (k == KeyEvent.VK_8) {
-            for (int i = 0; i < 1; i++) {
-                enemies.add(new Enemy(10, Math.random() * mapWidth, Math.random() * mapHeight));
-            }
-        }
-        if (k == KeyEvent.VK_J) {
-            // Attack
-            if (player.attackCooldown <= 0) {
-                player.attackHeld = true;
-            }
-        }
-        if (k == KeyEvent.VK_K) {
-            player.startDash(mapArray);
-        }
-        if (k == KeyEvent.VK_L) {
-            // TODO: Switch weapon — 0 - rapier, 1 - scythe, 2 - disc
-             player.weaponChoice++;
-             player.weaponChoice = player.weaponChoice % 3;
-        }
-        if (k == KeyEvent.VK_U) {
-            // TODO: Pickup
-        }
-        if (k == KeyEvent.VK_I) {
-            // TODO: Unbound
-        }
-        if (k == KeyEvent.VK_O) {
-            // TODO: Escape
+        switch (e.getKeyCode()) {
+            case KeyEvent.VK_P:
+                openPauseMenu();
+                break;
+            case KeyEvent.VK_W:
+                upHeld = true;
+                break;
+            case KeyEvent.VK_A:
+                leftHeld = true;
+                break;
+            case KeyEvent.VK_S:
+                downHeld = true;
+                break;
+            case KeyEvent.VK_D:
+                rightHeld = true;
+                break;
+            case KeyEvent.VK_J:
+                if (player.attackCooldown <= 0) player.attackHeld = true;
+                break;
+            case KeyEvent.VK_K:
+                player.startDash(mapGrid);
+                break;
+            case KeyEvent.VK_L:
+                player.weaponChoice = (player.weaponChoice + 1) % 3;
+                break;
+            case KeyEvent.VK_8:
+                enemies.add(new Enemy(10, Math.random() * MAP_WIDTH, Math.random() * MAP_HEIGHT));
+                break;
         }
     }
 
+    @Override
+    public void keyReleased(KeyEvent e) {
+        switch (e.getKeyCode()) {
+            case KeyEvent.VK_W:
+                upHeld = false;
+                break;
+            case KeyEvent.VK_A:
+                leftHeld = false;
+                break;
+            case KeyEvent.VK_S:
+                downHeld = false;
+                break;
+            case KeyEvent.VK_D:
+                rightHeld = false;
+                break;
+            case KeyEvent.VK_J:
+                if (player.attackHeld && player.attackCooldown <= 0) {
+                    player.attack(player.attackHoldCounter > 300, enemies);
+                    player.attackHeld = false;
+                    player.attackHoldCounter = 0;
+                }
+                break;
+        }
+    }
+
+    @Override
     public void keyTyped(KeyEvent e) {
     }
 
-    public void keyReleased(KeyEvent e) {
-        int k = e.getKeyCode();
-        if (k == KeyEvent.VK_W) {
-            WPressed = false;
-        }
-        if (k == KeyEvent.VK_A) {
-            APressed = false;
-        }
-        if (k == KeyEvent.VK_S) {
-            SPressed = false;
-        }
-        if (k == KeyEvent.VK_D) {
-            DPressed = false;
-        }
-        if (k == KeyEvent.VK_J && player.attackHeld) {
-            if (player.attackCooldown <= 0) {
-                player.attack(player.attackHoldCounter > 300, enemies);
-                player.attackHeld = false;
-                player.attackHoldCounter = 0;
-            }
-        }
-    }
-
-    void moveEnemies() {
-        for (Enemy enemy : enemies) {
-            enemy.move(player.x, player.y, enemies);
-        }
-    }
-
-    void spawnEnemies() {
-        if (difficultyValue < 15) { // once fewer than a certain number of enemies remain, spawn next wave
-            while (difficultyValue < 30 && roomDifficulty > 0) { // spawn until room runs out or max difficulty reached
-                // TODO: refactor when new enemy types are coded
-                enemies.add(new Enemy(10, Math.random() * mapWidth, Math.random() * mapHeight));
-                difficultyValue += 3;
-                roomDifficulty -= 3;
-            }
-        }
-    }
-
-    void removeDeadEnemies() {
-        for (int i = enemies.size() - 1; i >= 0; i--) {
-            if (!enemies.get(i).alive()) {
-                difficultyValue -= 3;
-                enemies.remove(i);
-            }
-        }
-    }
-
-    static BufferedImage loadImage(String filename) {
-        BufferedImage img = null;
-        try {
-            img = ImageIO.read(new File(filename));
-        } catch (IOException e) {
-            System.out.println(e.toString());
-            JOptionPane.showMessageDialog(null, "An image failed to load: " + filename, "Error", JOptionPane.ERROR_MESSAGE);
-        }
-        return img;
-    }
+    // -------------------------------------------------------------------------
+    // Rendering
+    // -------------------------------------------------------------------------
 
     class DrawPanel extends JPanel {
-        int panW, panH;
-        Color wall = new Color(199, 93, 72);
-        Color floor = new Color(138, 65, 51);
-        Color heavy = new Color(255, 255, 255, 100);
+
+        private static final Color FLOOR_COLOR = new Color(138, 65, 51);
+        private static final Color WALL_COLOR = new Color(199, 93, 72);
+        private static final Color HEAVY_COLOR = new Color(255, 255, 255, 100);
 
         DrawPanel() {
-            panW = 800;
-            panH = 500;
-            this.setPreferredSize(new Dimension(panW, panH));
-            this.setBackground(Color.BLACK);
+            setPreferredSize(new Dimension(800, 500));
+            setBackground(Color.BLACK);
         }
 
         @Override
         public void paintComponent(Graphics g) {
-            panW = this.getWidth();
-            panH = this.getHeight();
-
             super.paintComponent(g);
             Graphics2D g2d = (Graphics2D) g;
             g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
-            // Keep AttackAnimations in sync with the player's screen-center position
-            player.attackAnimations.setPlayerPosition(this.getWidth() / 2, this.getHeight() / 2);
+            int w = getWidth();
+            int h = getHeight();
+            int tilesX = w / TILE_SIZE + 1;
+            int tilesY = h / TILE_SIZE + 1;
 
-            tilesX = ((int) this.getWidth() / tileSize) + 1;
-            tilesY = ((int) this.getHeight() / tileSize) + 1;
+            player.attackAnimations.setPlayerPosition(w / 2, h / 2);
 
-            // Draw tiles
-            for (int i = 0; i <= tilesY; i++) {
-                for (int j = 0; j <= tilesX; j++) {
-                    if (!((int) player.x - (tilesX / 2) + j < 0
-                            || (int) player.y - (tilesY / 2) + i < 0
-                            || player.y - (tilesY / 2) + i >= mapHeight
-                            || player.x - (tilesX / 2) + j >= mapWidth)) {
-                        switch (mapArray[(int) player.y - (tilesY / 2) + i][(int) player.x - (tilesX / 2) + j]) {
-                            case 0:
-                                break;
-                            case 1:
-                                g.setColor(floor);
-                                g.fillRect((int) ((j - player.x % 1) * tileSize), (int) ((i - player.y % 1) * tileSize), tileSize, tileSize);
-                                break;
-                            case 2:
-                                g.setColor(wall);
-                                g.fillRect((int) ((j - player.x % 1) * tileSize), (int) ((i - player.y % 1) * tileSize), tileSize, tileSize);
-                            default:
-                                break;
-                        }
+            drawMap(g, tilesX, tilesY);
+            drawPlayer(g, g2d);
+            drawProjectiles(g, g2d, tilesX, tilesY);
+            drawEnemies(g, tilesX, tilesY);
+            drawHUD(g2d, w, h);
+            if (!player.alive()) drawGameOver(g2d, w, h);
+        }
+
+        private void drawMap(Graphics g, int tilesX, int tilesY) {
+            for (int row = 0; row <= tilesY; row++) {
+                for (int col = 0; col <= tilesX; col++) {
+                    int mapRow = (int) player.y - tilesY / 2 + row;
+                    int mapCol = (int) player.x - tilesX / 2 + col;
+                    if (mapRow < 0 || mapCol < 0 || mapRow >= MAP_HEIGHT || mapCol >= MAP_WIDTH) continue;
+
+                    int screenX = (int) ((col - player.x % 1) * TILE_SIZE);
+                    int screenY = (int) ((row - player.y % 1) * TILE_SIZE);
+
+                    switch (mapGrid[mapRow][mapCol]) {
+                        case 1:
+                            g.setColor(FLOOR_COLOR);
+                            g.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+                            break;
+                        case 2:
+                            g.setColor(WALL_COLOR);
+                            g.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+                            break;
                     }
                 }
             }
+        }
 
-            // Draw player
+        private void drawPlayer(Graphics g, Graphics2D g2d) {
+            int cx = getWidth() / 2;
+            int cy = getHeight() / 2;
+
             if (player.attackHoldCounter > 300) {
-                g.setColor(heavy);
-                g.fillOval(this.getWidth() / 2, this.getHeight() / 2, 100, 100);
+                g.setColor(HEAVY_COLOR);
+                g.fillOval(cx, cy, 100, 100);
             }
-            g.drawImage(playerSprite, this.getWidth() / 2 - 50, this.getHeight() / 2 - 50, 100, 100, null);
 
-            // Draw active attack animations
+            g.drawImage(playerSprite, cx - 50, cy - 50, 100, 100, null);
+
             player.attackAnimations.drawStab(g2d);
             player.attackAnimations.drawSwing(g2d, player.facingAngle);
+        }
 
-            // Draw all projectiles (rapier triangles and spinning disc squares)
-            for (Projectile projectile : player.projectiles) {
-                int screenX = (int) ((projectile.x - player.x + tilesX / 2.0) * tileSize);
-                int screenY = (int) ((projectile.y - player.y + tilesY / 2.0) * tileSize);
-                if (projectile.isDisc) {
-                    AffineTransform old2 = g2d.getTransform();
-                    g2d.translate(screenX, screenY);
-                    g2d.rotate(projectile.rotation);
+        private void drawProjectiles(Graphics g, Graphics2D g2d, int tilesX, int tilesY) {
+            for (Projectile p : player.projectiles) {
+                int sx = (int) ((p.x - player.x + tilesX / 2.0) * TILE_SIZE);
+                int sy = (int) ((p.y - player.y + tilesY / 2.0) * TILE_SIZE);
+
+                if (p.isDisc) {
+                    AffineTransform saved = g2d.getTransform();
+                    g2d.translate(sx, sy);
+                    g2d.rotate(p.rotation);
                     g2d.setColor(Color.ORANGE);
                     g2d.fillRect(-20, -20, 40, 40);
-                    g2d.setTransform(old2);
+                    g2d.setTransform(saved);
                 } else {
-                    g.setColor(Color.red);
-                    Polygon p = new Polygon();
-                    p.addPoint(screenX, screenY);
-                    p.addPoint((int) (screenX + (-projectile.vy) * 25), (int) (screenY + projectile.vx * 25));
-                    p.addPoint((int) (screenX + projectile.vy * 25), (int) (screenY + (-projectile.vx) * 25));
-                    g.drawPolygon(p);
+                    // Rapier bolt drawn as a small triangle pointing in the direction of travel
+                    g.setColor(Color.RED);
+                    Polygon bolt = new Polygon();
+                    bolt.addPoint(sx, sy);
+                    bolt.addPoint((int) (sx - p.vy * 25), (int) (sy + p.vx * 25));
+                    bolt.addPoint((int) (sx + p.vy * 25), (int) (sy - p.vx * 25));
+                    g.drawPolygon(bolt);
                 }
             }
+        }
 
-            // Draw enemies
-            g.setColor(Color.green);
+        private void drawEnemies(Graphics g, int tilesX, int tilesY) {
+            g.setColor(Color.GREEN);
             for (Enemy enemy : enemies) {
-                g.fillOval((int) ((enemy.x - player.x + tilesX / 2) * tileSize), (int) ((enemy.y - player.y + (tilesY / 2)) * tileSize), 50, 50);
+                int sx = (int) ((enemy.x - player.x + tilesX / 2.0) * TILE_SIZE);
+                int sy = (int) ((enemy.y - player.y + tilesY / 2.0) * TILE_SIZE);
+                g.fillOval(sx, sy, 50, 50);
             }
+        }
 
-            // --- Dash cooldown bar (bottom-right) ---
-            int barW = 160;
-            int barH = 16;
-            int barX = panW - barW - 20;
-            int barY = panH - barH - 20;
-            float dashFill = player.dashCooldownFraction();
-            boolean dashReady = dashFill >= 1f;
+        private void drawHUD(Graphics2D g2d, int w, int h) {
+            drawHealthBar(g2d, h);
+            drawDashBar(g2d, w, h);
+        }
 
-            // Background track
+        private void drawHealthBar(Graphics2D g2d, int h) {
+            int barW = 200, barH = 16;
+            int barX = 20, barY = h - barH - 20;
+            float fill = Math.max(0f, (float) player.hp / player.maxHp);
+
+            // Track
             g2d.setColor(new Color(30, 30, 30, 200));
             g2d.fillRoundRect(barX - 2, barY - 2, barW + 4, barH + 4, 8, 8);
 
-            // Filled portion
-            Color barColor = dashReady ? new Color(100, 210, 255) : new Color(60, 130, 200);
-            g2d.setColor(barColor);
-            g2d.fillRoundRect(barX, barY, (int)(barW * dashFill), barH, 6, 6);
+            // Fill — shifts from green to yellow to red as HP falls
+            Color fillColor;
+            if (fill > 0.5f) fillColor = new Color(60, 200, 80);
+            else if (fill > 0.25f) fillColor = new Color(220, 180, 0);
+            else fillColor = new Color(210, 50, 50);
+            g2d.setColor(fillColor);
+            g2d.fillRoundRect(barX, barY, (int) (barW * fill), barH, 6, 6);
 
-            // Pulse/glow outline when ready
-            if (dashReady) {
+            // Flashing outline during i-frames
+            if (player.iFrames > 0 && (player.iFrames / 4) % 2 == 0) {
+                g2d.setColor(new Color(255, 255, 255, 180));
+                g2d.setStroke(new BasicStroke(2f));
+                g2d.drawRoundRect(barX - 2, barY - 2, barW + 4, barH + 4, 8, 8);
+                g2d.setStroke(new BasicStroke(1f));
+            }
+
+            g2d.setColor(Color.WHITE);
+            g2d.setFont(new Font("SansSerif", Font.BOLD, 11));
+            g2d.drawString("HP  " + Math.max(0, player.hp) + " / " + player.maxHp, barX, barY - 5);
+        }
+
+        private void drawDashBar(Graphics2D g2d, int w, int h) {
+            int barW = 160, barH = 16;
+            int barX = w - barW - 20;
+            int barY = h - barH - 20;
+            float fill = player.dashReadiness();
+            boolean ready = fill >= 1f;
+
+            // Track
+            g2d.setColor(new Color(30, 30, 30, 200));
+            g2d.fillRoundRect(barX - 2, barY - 2, barW + 4, barH + 4, 8, 8);
+
+            // Fill
+            g2d.setColor(ready ? new Color(100, 210, 255) : new Color(60, 130, 200));
+            g2d.fillRoundRect(barX, barY, (int) (barW * fill), barH, 6, 6);
+
+            // Glow outline when ready
+            if (ready) {
                 g2d.setColor(new Color(180, 240, 255, 160));
                 g2d.setStroke(new BasicStroke(2f));
                 g2d.drawRoundRect(barX - 2, barY - 2, barW + 4, barH + 4, 8, 8);
                 g2d.setStroke(new BasicStroke(1f));
             }
 
-            // --- Health bar (bottom-left) ---
-            int hBarW = 200;
-            int hBarH = 16;
-            int hBarX = 20;
-            int hBarY = panH - hBarH - 20;
-            float hFill = Math.max(0f, (float) player.hp / player.maxHp);
-
-            // Background track
-            g2d.setColor(new Color(30, 30, 30, 200));
-            g2d.fillRoundRect(hBarX - 2, hBarY - 2, hBarW + 4, hBarH + 4, 8, 8);
-
-            // Filled portion — green → yellow → red as HP drops
-            Color hColor;
-            if (hFill > 0.5f)      hColor = new Color(60, 200, 80);
-            else if (hFill > 0.25f) hColor = new Color(220, 180, 0);
-            else                    hColor = new Color(210, 50, 50);
-            g2d.setColor(hColor);
-            g2d.fillRoundRect(hBarX, hBarY, (int)(hBarW * hFill), hBarH, 6, 6);
-
-            // Flash white outline during i-frames
-            if (player.iFrames > 0 && (player.iFrames / 4) % 2 == 0) {
-                g2d.setColor(new Color(255, 255, 255, 180));
-                g2d.setStroke(new BasicStroke(2f));
-                g2d.drawRoundRect(hBarX - 2, hBarY - 2, hBarW + 4, hBarH + 4, 8, 8);
-                g2d.setStroke(new BasicStroke(1f));
-            }
-
-            // Label
             g2d.setColor(Color.WHITE);
             g2d.setFont(new Font("SansSerif", Font.BOLD, 11));
-            g2d.drawString("HP  " + Math.max(0, player.hp) + " / " + player.maxHp, hBarX, hBarY - 5);
+            g2d.drawString(ready ? "DASH  [K]" : "DASH", barX, barY - 5);
+        }
 
-            // --- Game Over overlay ---
-            if (!player.alive()) {
-                // Dim the screen
-                g2d.setColor(new Color(0, 0, 0, 160));
-                g2d.fillRect(0, 0, panW, panH);
+        private void drawGameOver(Graphics2D g2d, int w, int h) {
+            g2d.setColor(new Color(0, 0, 0, 160));
+            g2d.fillRect(0, 0, w, h);
 
-                // "GAME OVER" title
-                g2d.setFont(new Font("SansSerif", Font.BOLD, 72));
-                FontMetrics fm = g2d.getFontMetrics();
-                String title = "GAME OVER";
-                int tx = (panW - fm.stringWidth(title)) / 2;
-                int ty = panH / 2 - 20;
-                g2d.setColor(new Color(180, 40, 40));
-                g2d.drawString(title, tx + 3, ty + 3); // shadow
-                g2d.setColor(Color.WHITE);
-                g2d.drawString(title, tx, ty);
-            }
+            String text = "GAME OVER";
+            g2d.setFont(new Font("SansSerif", Font.BOLD, 72));
+            FontMetrics fm = g2d.getFontMetrics();
+            int tx = (w - fm.stringWidth(text)) / 2;
+            int ty = h / 2 - 20;
+
+            g2d.setColor(new Color(180, 40, 40)); // drop shadow
+            g2d.drawString(text, tx + 3, ty + 3);
+            g2d.setColor(Color.WHITE);
+            g2d.drawString(text, tx, ty);
         }
     }
 }

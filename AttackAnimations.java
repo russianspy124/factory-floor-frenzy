@@ -1,238 +1,160 @@
-/**
- * Contains:
- * - Swing attack animation
- * - Stab attack animation
- */
-
 import java.awt.*;
 import java.awt.geom.AffineTransform;
 import java.util.ArrayList;
 import java.util.HashSet;
 
-public class AttackAnimations {
-    /* =========================================================
-     * PLAYER REFERENCE
-     * ========================================================= */
+class AttackAnimations {
 
+    // Screen-space position of the player center, kept in sync each frame
     private int playerX;
     private int playerY;
 
-    public AttackAnimations(int playerX, int playerY) {
+    AttackAnimations(int playerX, int playerY) {
         this.playerX = playerX;
         this.playerY = playerY;
     }
 
-    public void setPlayerPosition(int x, int y) {
-        this.playerX = x;
-        this.playerY = y;
+    void setPlayerPosition(int x, int y) {
+        playerX = x;
+        playerY = y;
     }
 
-    /* =========================================================
-     * SWING ATTACK
-     * ========================================================= */
+    // -------------------------------------------------------------------------
+    // Scythe swing
+    // -------------------------------------------------------------------------
 
-    /** True while the weapon is rotating. */
+    private static final int HAND_OFFSET = 40;  // px from player center to grip
+    private static final int WEAPON_WIDTH = 125;
+    private static final int WEAPON_HEIGHT = 90;
+    private static final int SWING_HIT_RADIUS = 130; // px — how far the blade reaches
+    private static final double SWING_SPEED = 0.25; // radians per tick
+
     private boolean swinging = false;
+    private double swingAngle;
+    private double swingStart;
+    private double swingEnd;
+    private final HashSet<Enemy> alreadyHitThisSwing = new HashSet<>();
 
-    /** Current weapon rotation angle. */
-    private double angle;
-
-    /** Starting and ending swing angles. */
-    private double startAngle;
-    private double endAngle;
-
-    /** Distance from player center to hand. */
-    private final int handOffset = 40;
-
-    /** Weapon dimensions. */
-    private final int weaponWidth  = 125;
-    private final int weaponHeight = 90;
-
-    /** Hit radius of the scythe blade in screen pixels. */
-    private final int swingHitRadius = 130;
-
-    /** Enemies already hit during the current swing. */
-    private final HashSet<Enemy> swingHitEnemies = new HashSet<>();
-
-    /**
-     * Begins a swing animation.
-     *
-     * @param facingAngle direction the player is facing (radians)
-     */
-    public void startSwing(double facingAngle) {
-        startAngle = facingAngle - Math.PI / 2;
-        endAngle   = facingAngle + Math.PI / 2;
-        angle = startAngle;
+    void startSwing(double facingAngle) {
+        swingStart = facingAngle - Math.PI / 2;
+        swingEnd = facingAngle + Math.PI / 2;
+        swingAngle = swingStart;
         swinging = true;
-        swingHitEnemies.clear();
+        alreadyHitThisSwing.clear();
     }
 
-    /**
-     * Updates swing animation.
-     */
-    public void updateSwing() {
-        if (!swinging)
-            return;
-
-        angle += 0.25;
-
-        if (angle >= endAngle) {
+    void updateSwing() {
+        if (!swinging) return;
+        swingAngle += SWING_SPEED;
+        if (swingAngle >= swingEnd) {
             swinging = false;
-            swingHitEnemies.clear();
+            alreadyHitThisSwing.clear();
         }
     }
 
-    /**
-     * Checks which enemies are struck by the current swing frame and damages them.
-     * Call once per tick while the scythe is active.
-     *
-     * @param enemies       live enemy list
-     * @param enemyScreenX  screen-pixel X for each enemy (parallel array)
-     * @param enemyScreenY  screen-pixel Y for each enemy (parallel array)
-     * @param damage        damage to apply on hit
-     */
-    public void checkSwingHits(ArrayList<Enemy> enemies,
-                               int[] enemyScreenX, int[] enemyScreenY,
-                               int damage) {
-        if (!swinging)
-            return;
+    void checkSwingHits(ArrayList<Enemy> enemies, int[] enemyScreenX, int[] enemyScreenY, int damage) {
+        if (!swinging) return;
 
         for (int i = 0; i < enemies.size(); i++) {
             Enemy enemy = enemies.get(i);
-            if (swingHitEnemies.contains(enemy))
-                continue;
+            if (alreadyHitThisSwing.contains(enemy)) continue;
 
             int dx = enemyScreenX[i] - playerX;
             int dy = enemyScreenY[i] - playerY;
             double dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist > SWING_HIT_RADIUS) continue;
 
-            if (dist > swingHitRadius)
-                continue;
+            // Check the enemy falls within the current arc
+            double angle = Math.atan2(dy, dx);
+            while (angle < swingStart) angle += 2 * Math.PI;
+            while (angle > swingStart + 2 * Math.PI) angle -= 2 * Math.PI;
 
-            double enemyAngle = Math.atan2(dy, dx);
-
-            // Normalise enemy angle into the [startAngle, endAngle] window
-            double normAngle = enemyAngle;
-            while (normAngle < startAngle) normAngle += 2 * Math.PI;
-            while (normAngle > startAngle + 2 * Math.PI) normAngle -= 2 * Math.PI;
-
-            if (normAngle >= startAngle && normAngle <= endAngle) {
+            if (angle >= swingStart && angle <= swingEnd) {
                 enemy.takeDamage(damage);
-                swingHitEnemies.add(enemy);
+                alreadyHitThisSwing.add(enemy);
             }
         }
     }
 
-    /**
-     * Draws the swinging weapon.
-     */
-    public void drawSwing(Graphics2D g2d, double facingAngle) {
-        if (!swinging)
-            return;
+    void drawSwing(Graphics2D g2d, double facingAngle) {
+        if (!swinging) return;
 
-        AffineTransform old = g2d.getTransform();
+        AffineTransform saved = g2d.getTransform();
+        int gripX = playerX + (int) (Math.cos(facingAngle) * HAND_OFFSET);
+        int gripY = playerY + (int) (Math.sin(facingAngle) * HAND_OFFSET);
 
-        int handX = playerX + (int)(Math.cos(facingAngle) * handOffset);
-        int handY = playerY + (int)(Math.sin(facingAngle) * handOffset);
-
-        g2d.translate(handX, handY);
-        g2d.rotate(angle);
-
+        g2d.translate(gripX, gripY);
+        g2d.rotate(swingAngle);
         g2d.setColor(Color.GRAY);
-        g2d.fillRect(0, -weaponHeight / 2, weaponWidth, weaponHeight);
-
-        g2d.setTransform(old);
+        g2d.fillRect(0, -WEAPON_HEIGHT / 2, WEAPON_WIDTH, WEAPON_HEIGHT);
+        g2d.setTransform(saved);
     }
 
-    public boolean isSwinging() {
+    boolean isSwinging() {
         return swinging;
     }
 
-    /* =========================================================
-     * STAB ATTACK
-     * ========================================================= */
+    // -------------------------------------------------------------------------
+    // Rapier stab
+    // -------------------------------------------------------------------------
+
+    private static final int STAB_WINDUP_MS = 120; // ms before the thrust begins
+    private static final int STAB_DURATION_MS = 160; // ms the thrust takes to fully extend
 
     private boolean stabActive = false;
-
     private long stabStartTime;
-
-    /** Windup before thrust begins. */
-    private final int stabWindup = 120;
-
-    /** Forward movement duration. */
-    private final int stabDuration = 160;
-
-    /** Direction of stab. */
     private double stabAngle;
+    private float stabProgress; // 0.0 = retracted, 1.0 = fully extended
 
-    /** Current extension percentage (0-1). */
-    private float stabProgress;
-
-    /**
-     * Begins a stab attack.
-     *
-     * @param angle direction of stab in radians
-     */
-    public void startStab(double angle) {
+    void startStab(double angle) {
         stabActive = true;
         stabAngle = angle;
         stabStartTime = System.currentTimeMillis();
     }
 
-    /**
-     * Updates stab progression.
-     */
-    public void updateStab() {
-        if (!stabActive)
-            return;
+    void updateStab() {
+        if (!stabActive) return;
 
         long elapsed = System.currentTimeMillis() - stabStartTime;
 
-        if (elapsed < stabWindup) {
-            stabProgress = 0;
-        } else if (elapsed < stabWindup + stabDuration) {
-            stabProgress = (float)(elapsed - stabWindup) / stabDuration;
+        if (elapsed < STAB_WINDUP_MS) {
+            stabProgress = 0f;
+        } else if (elapsed < STAB_WINDUP_MS + STAB_DURATION_MS) {
+            stabProgress = (float) (elapsed - STAB_WINDUP_MS) / STAB_DURATION_MS;
         } else {
-            stabProgress = 0;
+            stabProgress = 0f;
             stabActive = false;
         }
     }
 
-    /**
-     * Draws stabbing weapon.
-     */
-    public void drawStab(Graphics2D g2d) {
-        if (!stabActive)
-            return;
+    void drawStab(Graphics2D g2d) {
+        if (!stabActive) return;
 
-        AffineTransform old = g2d.getTransform();
-
+        AffineTransform saved = g2d.getTransform();
         double reach = 20 + (80 * stabProgress);
+        int tipX = playerX + (int) (Math.cos(stabAngle) * reach);
+        int tipY = playerY + (int) (Math.sin(stabAngle) * reach);
 
-        int x = playerX + (int)(Math.cos(stabAngle) * reach);
-        int y = playerY + (int)(Math.sin(stabAngle) * reach);
-
-        g2d.translate(x, y);
+        g2d.translate(tipX, tipY);
         g2d.rotate(stabAngle);
-
         g2d.setColor(new Color(0, 255, 255, 160));
         g2d.fillRect(0, -15, 100, 30);
-
-        g2d.setTransform(old);
+        g2d.setTransform(saved);
     }
 
-    public boolean isStabbing() {
+    boolean isStabbing() {
         return stabActive;
     }
 
-    /**
-     * Immediately cancels all active attack animations.
-     * Called when the player dashes mid-attack.
-     */
-    public void cancelAll() {
+    // -------------------------------------------------------------------------
+    // Shared
+    // -------------------------------------------------------------------------
+
+    // Immediately cancels all animations — called when the player dashes mid-attack
+    void cancelAll() {
         swinging = false;
-        swingHitEnemies.clear();
         stabActive = false;
-        stabProgress = 0;
+        stabProgress = 0f;
+        alreadyHitThisSwing.clear();
     }
 }
