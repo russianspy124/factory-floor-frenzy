@@ -1,5 +1,6 @@
 class Damageable {
     int hp;
+    int maxHp;
     long lastHit = 0;
     int invuln = 500;
     int stunDuration = 120;
@@ -8,6 +9,7 @@ class Damageable {
 
     Damageable(int hp) {
         this.hp = hp;
+        this.maxHp = hp;
     }
 
     boolean canTakeDamage() {

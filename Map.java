@@ -85,6 +85,7 @@ public class Map implements KeyListener {
                 player.checkProjectileLifespan();
                 spawnEnemies();
                 removeDeadEnemies();
+                if (!player.alive()) timer.stop();
                 panel.repaint();
             }
         });
@@ -378,11 +379,55 @@ public class Map implements KeyListener {
                 g2d.setStroke(new BasicStroke(1f));
             }
 
+            // --- Health bar (bottom-left) ---
+            int hBarW = 200;
+            int hBarH = 16;
+            int hBarX = 20;
+            int hBarY = panH - hBarH - 20;
+            float hFill = Math.max(0f, (float) player.hp / player.maxHp);
+
+            // Background track
+            g2d.setColor(new Color(30, 30, 30, 200));
+            g2d.fillRoundRect(hBarX - 2, hBarY - 2, hBarW + 4, hBarH + 4, 8, 8);
+
+            // Filled portion — green → yellow → red as HP drops
+            Color hColor;
+            if (hFill > 0.5f)      hColor = new Color(60, 200, 80);
+            else if (hFill > 0.25f) hColor = new Color(220, 180, 0);
+            else                    hColor = new Color(210, 50, 50);
+            g2d.setColor(hColor);
+            g2d.fillRoundRect(hBarX, hBarY, (int)(hBarW * hFill), hBarH, 6, 6);
+
+            // Flash white outline during i-frames
+            if (player.iFrames > 0 && (player.iFrames / 4) % 2 == 0) {
+                g2d.setColor(new Color(255, 255, 255, 180));
+                g2d.setStroke(new BasicStroke(2f));
+                g2d.drawRoundRect(hBarX - 2, hBarY - 2, hBarW + 4, hBarH + 4, 8, 8);
+                g2d.setStroke(new BasicStroke(1f));
+            }
+
             // Label
             g2d.setColor(Color.WHITE);
             g2d.setFont(new Font("SansSerif", Font.BOLD, 11));
-            String label = dashReady ? "DASH  [K]" : "DASH";
-            g2d.drawString(label, barX, barY - 5);
+            g2d.drawString("HP  " + Math.max(0, player.hp) + " / " + player.maxHp, hBarX, hBarY - 5);
+
+            // --- Game Over overlay ---
+            if (!player.alive()) {
+                // Dim the screen
+                g2d.setColor(new Color(0, 0, 0, 160));
+                g2d.fillRect(0, 0, panW, panH);
+
+                // "GAME OVER" title
+                g2d.setFont(new Font("SansSerif", Font.BOLD, 72));
+                FontMetrics fm = g2d.getFontMetrics();
+                String title = "GAME OVER";
+                int tx = (panW - fm.stringWidth(title)) / 2;
+                int ty = panH / 2 - 20;
+                g2d.setColor(new Color(180, 40, 40));
+                g2d.drawString(title, tx + 3, ty + 3); // shadow
+                g2d.setColor(Color.WHITE);
+                g2d.drawString(title, tx, ty);
+            }
         }
     }
 }
