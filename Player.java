@@ -107,18 +107,24 @@ class Player extends Damageable {
         }
     }
 
+    /** Max rapier travel distance in world tiles before it disappears. */
+    private static final double RAPIER_MAX_DISTANCE = 3.0;
+
     void checkProjectileLifespan() {
         for (int i = projectiles.size() - 1; i >= 0; i--) {
             Projectile p = projectiles.get(i);
             if (p.isDisc) {
                 // Disc is removed once it travels far enough from its spawn point
-                double dx = p.x - x;
-                double dy = p.y - y;
+                double dx = p.x - p.spawnX;
+                double dy = p.y - p.spawnY;
                 if (Math.sqrt(dx * dx + dy * dy) > DISC_MAX_DISTANCE) {
                     projectiles.remove(i);
                 }
             } else {
-                if (p.lifespan <= 0) {
+                // Rapier: remove if lifespan expired OR it travelled beyond max range
+                double dx = p.x - p.spawnX;
+                double dy = p.y - p.spawnY;
+                if (p.lifespan <= 0 || Math.sqrt(dx * dx + dy * dy) > RAPIER_MAX_DISTANCE) {
                     projectiles.remove(i);
                 }
             }
@@ -134,6 +140,10 @@ class Player extends Damageable {
                 double dy = projectile.y - enemy.y;
                 double dist = Math.sqrt(dx * dx + dy * dy);
 
+                System.out.println(dx);
+                System.out.println(dy);
+                System.out.println(dist);
+                System.out.println("############");
                 if (dist < 0.5) {
                     enemy.takeDamage(10);
                     projectiles.remove(i);

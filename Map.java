@@ -77,9 +77,9 @@ public class Map implements KeyListener {
                 int curTilesX = panel.getWidth() / tileSize + 1;
                 int curTilesY = panel.getHeight() / tileSize + 1;
                 player.tickAttack(enemies, tileSize, curTilesX, curTilesY);
+                player.moveProjectiles();
                 player.checkProjectileHits(enemies);
                 player.checkProjectileLifespan();
-                player.moveProjectiles();
                 spawnEnemies();
                 removeDeadEnemies();
                 panel.repaint();

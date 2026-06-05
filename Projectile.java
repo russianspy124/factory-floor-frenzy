@@ -1,5 +1,6 @@
 class Projectile {
     double x, y, vx, vy, rotation;
+    double spawnX, spawnY;
     int size = 40, lifespan = 60;
     boolean isDisc = false;
 
@@ -7,6 +8,8 @@ class Projectile {
     Projectile(double startX, double startY, double vx, double vy) {
         this.x = startX;
         this.y = startY;
+        this.spawnX = startX;
+        this.spawnY = startY;
         this.vx = vx;
         this.vy = vy;
     }
