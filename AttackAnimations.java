@@ -2,13 +2,12 @@
  * Contains:
  * - Swing attack animation
  * - Stab attack animation
- * - Thrown weapon animation
- * - Thrown weapon should come back to player, have to rework that
  */
 
 import java.awt.*;
 import java.awt.geom.AffineTransform;
 import java.util.ArrayList;
+import java.util.HashSet;
 
 public class AttackAnimations {
     /* =========================================================
@@ -46,8 +45,14 @@ public class AttackAnimations {
     private final int handOffset = 40;
 
     /** Weapon dimensions. */
-    private final int weaponWidth = 125;
+    private final int weaponWidth  = 125;
     private final int weaponHeight = 90;
+
+    /** Hit radius of the scythe blade in screen pixels. */
+    private final int swingHitRadius = 130;
+
+    /** Enemies already hit during the current swing. */
+    private final HashSet<Enemy> swingHitEnemies = new HashSet<>();
 
     /**
      * Begins a swing animation.
@@ -55,19 +60,17 @@ public class AttackAnimations {
      * @param facingAngle direction the player is facing (radians)
      */
     public void startSwing(double facingAngle) {
-
         startAngle = facingAngle - Math.PI / 2;
         endAngle   = facingAngle + Math.PI / 2;
-
         angle = startAngle;
         swinging = true;
+        swingHitEnemies.clear();
     }
 
     /**
      * Updates swing animation.
      */
     public void updateSwing() {
-
         if (!swinging)
             return;
 
@@ -75,6 +78,48 @@ public class AttackAnimations {
 
         if (angle >= endAngle) {
             swinging = false;
+            swingHitEnemies.clear();
+        }
+    }
+
+    /**
+     * Checks which enemies are struck by the current swing frame and damages them.
+     * Call once per tick while the scythe is active.
+     *
+     * @param enemies       live enemy list
+     * @param enemyScreenX  screen-pixel X for each enemy (parallel array)
+     * @param enemyScreenY  screen-pixel Y for each enemy (parallel array)
+     * @param damage        damage to apply on hit
+     */
+    public void checkSwingHits(ArrayList<Enemy> enemies,
+                               int[] enemyScreenX, int[] enemyScreenY,
+                               int damage) {
+        if (!swinging)
+            return;
+
+        for (int i = 0; i < enemies.size(); i++) {
+            Enemy enemy = enemies.get(i);
+            if (swingHitEnemies.contains(enemy))
+                continue;
+
+            int dx = enemyScreenX[i] - playerX;
+            int dy = enemyScreenY[i] - playerY;
+            double dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist > swingHitRadius)
+                continue;
+
+            double enemyAngle = Math.atan2(dy, dx);
+
+            // Normalise enemy angle into the [startAngle, endAngle] window
+            double normAngle = enemyAngle;
+            while (normAngle < startAngle) normAngle += 2 * Math.PI;
+            while (normAngle > startAngle + 2 * Math.PI) normAngle -= 2 * Math.PI;
+
+            if (normAngle >= startAngle && normAngle <= endAngle) {
+                enemy.takeDamage(damage);
+                swingHitEnemies.add(enemy);
+            }
         }
     }
 
@@ -82,28 +127,19 @@ public class AttackAnimations {
      * Draws the swinging weapon.
      */
     public void drawSwing(Graphics2D g2d, double facingAngle) {
-
         if (!swinging)
             return;
 
         AffineTransform old = g2d.getTransform();
 
-        int handX =
-                playerX + (int)(Math.cos(facingAngle) * handOffset);
-
-        int handY =
-                playerY + (int)(Math.sin(facingAngle) * handOffset);
+        int handX = playerX + (int)(Math.cos(facingAngle) * handOffset);
+        int handY = playerY + (int)(Math.sin(facingAngle) * handOffset);
 
         g2d.translate(handX, handY);
         g2d.rotate(angle);
 
         g2d.setColor(Color.GRAY);
-
-        g2d.fillRect(
-                0,
-                -weaponHeight / 2,
-                weaponWidth,
-                weaponHeight);
+        g2d.fillRect(0, -weaponHeight / 2, weaponWidth, weaponHeight);
 
         g2d.setTransform(old);
     }
@@ -138,10 +174,8 @@ public class AttackAnimations {
      * @param angle direction of stab in radians
      */
     public void startStab(double angle) {
-
         stabActive = true;
         stabAngle = angle;
-
         stabStartTime = System.currentTimeMillis();
     }
 
@@ -149,25 +183,16 @@ public class AttackAnimations {
      * Updates stab progression.
      */
     public void updateStab() {
-
         if (!stabActive)
             return;
 
-        long elapsed =
-                System.currentTimeMillis() - stabStartTime;
+        long elapsed = System.currentTimeMillis() - stabStartTime;
 
         if (elapsed < stabWindup) {
-
             stabProgress = 0;
-
         } else if (elapsed < stabWindup + stabDuration) {
-
-            stabProgress =
-                    (float)(elapsed - stabWindup)
-                    / stabDuration;
-
+            stabProgress = (float)(elapsed - stabWindup) / stabDuration;
         } else {
-
             stabProgress = 0;
             stabActive = false;
         }
@@ -177,29 +202,20 @@ public class AttackAnimations {
      * Draws stabbing weapon.
      */
     public void drawStab(Graphics2D g2d) {
-
         if (!stabActive)
             return;
 
         AffineTransform old = g2d.getTransform();
 
-        double reach =
-                20 + (80 * stabProgress);
+        double reach = 20 + (80 * stabProgress);
 
-        int x =
-                playerX
-                        + (int)(Math.cos(stabAngle) * reach);
-
-        int y =
-                playerY
-                        + (int)(Math.sin(stabAngle) * reach);
+        int x = playerX + (int)(Math.cos(stabAngle) * reach);
+        int y = playerY + (int)(Math.sin(stabAngle) * reach);
 
         g2d.translate(x, y);
         g2d.rotate(stabAngle);
 
-        g2d.setColor(
-                new Color(0, 255, 255, 160));
-
+        g2d.setColor(new Color(0, 255, 255, 160));
         g2d.fillRect(0, -15, 100, 30);
 
         g2d.setTransform(old);
@@ -207,90 +223,5 @@ public class AttackAnimations {
 
     public boolean isStabbing() {
         return stabActive;
-    }
-
-    /* =========================================================
-     * THROWN WEAPON
-     * ========================================================= */
-
-    public static class Projectile {
-
-        /** Current position. */
-        public double x;
-        public double y;
-
-        /** Velocity. */
-        public double dx;
-        public double dy;
-
-        /** Current visual rotation. */
-        public double rotation;
-
-        /** Draw size. */
-        public int size = 40;
-    }
-
-    private final ArrayList<Projectile> projectiles =
-            new ArrayList<>();
-
-    /**
-     * Creates a thrown weapon.
-     *
-     * @param direction launch angle in radians
-     */
-    public void throwWeapon(double direction) {
-
-        Projectile p = new Projectile();
-
-        p.x = playerX;
-        p.y = playerY;
-
-        p.dx = Math.cos(direction) * 7;
-        p.dy = Math.sin(direction) * 7;
-
-        projectiles.add(p);
-    }
-
-    /**
-     * Updates all projectiles.
-     */
-    public void updateProjectiles() {
-
-        for (Projectile p : projectiles) {
-
-            p.x += p.dx;
-            p.y += p.dy;
-
-            p.rotation += 0.3;
-        }
-    }
-
-    /**
-     * Draws all projectiles.
-     */
-    public void drawProjectiles(Graphics2D g2d) {
-
-        for (Projectile p : projectiles) {
-
-            AffineTransform old =
-                    g2d.getTransform();
-
-            g2d.translate(p.x, p.y);
-            g2d.rotate(p.rotation);
-
-            g2d.setColor(Color.ORANGE);
-
-            g2d.fillRect(
-                    -20,
-                    -20,
-                    40,
-                    40);
-
-            g2d.setTransform(old);
-        }
-    }
-
-    public ArrayList<Projectile> getProjectiles() {
-        return projectiles;
     }
 }
