@@ -92,7 +92,7 @@ class Player extends Damageable {
             attackCooldown = 100;
         }
         if (weaponChoice == 2) { // disc — thrown projectile
-            double discSpeed = 0.3;
+            double discSpeed = 0.1;
             projectiles.add(new Projectile(x, y,
                     Math.cos(facingAngle) * discSpeed,
                     Math.sin(facingAngle) * discSpeed,
