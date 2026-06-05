@@ -224,4 +224,15 @@ public class AttackAnimations {
     public boolean isStabbing() {
         return stabActive;
     }
+
+    /**
+     * Immediately cancels all active attack animations.
+     * Called when the player dashes mid-attack.
+     */
+    public void cancelAll() {
+        swinging = false;
+        swingHitEnemies.clear();
+        stabActive = false;
+        stabProgress = 0;
+    }
 }

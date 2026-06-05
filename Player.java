@@ -12,6 +12,97 @@ class Player extends Damageable {
     /** Angle (radians) toward the last targeted enemy, used by attack animations. */
     double facingAngle = 0;
 
+    /* =========================================================
+     * DASH
+     * ========================================================= */
+
+    /** Total distance to travel per dash (world units). */
+    private static final double DASH_DISTANCE = 2.5;
+
+    /** Speed per tick while dashing (world units). */
+    private static final double DASH_SPEED = 0.35;
+
+    /** Ticks between dashes. */
+    private static final int DASH_COOLDOWN_MAX = 120;
+
+    /** True while the dash is actively moving the player. */
+    boolean dashing = false;
+
+    /** World-unit distance still remaining in this dash. */
+    private double dashRemaining = 0;
+
+    /** Direction of the current dash. */
+    private double dashDirX = 0;
+    private double dashDirY = 0;
+
+    /** Ticks until the next dash is available (0 = ready). */
+    int dashCooldown = 0;
+
+    /**
+     * Begins a dash in the direction the player is currently facing.
+     * Cancels any active attack animation.
+     *
+     * @param mapArray collision map
+     */
+    void startDash(int[][] mapArray) {
+        if (dashing || dashCooldown > 0) return;
+
+        // Cancel attack animations
+        attackAnimations.cancelAll();
+        attackHeld = false;
+        attackHoldCounter = 0;
+
+        dashing = true;
+        dashRemaining = DASH_DISTANCE;
+        double dashAngle = isMoving ? moveAngle : facingAngle;
+        dashDirX = Math.cos(dashAngle);
+        dashDirY = Math.sin(dashAngle);
+
+        // Grant iFrames for the full dash duration plus a small buffer
+        int dashTicks = (int) Math.ceil(DASH_DISTANCE / DASH_SPEED);
+        iFrames = Math.max(iFrames, dashTicks + 5);
+    }
+
+    /**
+     * Advances the dash by one tick. Must be called each game tick.
+     *
+     * @param mapArray collision map
+     */
+    void tickDash(int[][] mapArray) {
+        if (dashCooldown > 0) dashCooldown--;
+
+        if (!dashing) return;
+
+        double step = Math.min(DASH_SPEED, dashRemaining);
+
+        double nx = x + dashDirX * step;
+        double ny = y + dashDirY * step;
+
+        // Collision: only move on walkable tiles, with axis sliding
+        if (mapArray[(int) ny][(int) nx] == 1) {
+            x = nx;
+            y = ny;
+        } else if (mapArray[(int) y][(int) nx] == 1) {
+            x = nx;
+        } else if (mapArray[(int) ny][(int) x] == 1) {
+            y = ny;
+        } else {
+            dashRemaining = 0; // wall — stop early
+        }
+
+        dashRemaining -= step;
+        if (dashRemaining <= 0) {
+            dashing = false;
+            dashCooldown = DASH_COOLDOWN_MAX;
+        }
+    }
+
+    /** Returns 0.0 (empty/on cooldown) to 1.0 (full/ready). */
+    float dashCooldownFraction() {
+        if (dashing) return 0f;
+        return 1f - (float) dashCooldown / DASH_COOLDOWN_MAX;
+    }
+
     /** Max disc travel distance in world tiles before it disappears. */
     private static final double DISC_MAX_DISTANCE = 6.0;
 
@@ -26,27 +117,20 @@ class Player extends Damageable {
         attackAnimations = new AttackAnimations(0, 0);
     }
 
+    /** Direction of the last WASD input (radians). Updated each tick a key is held. */
+    double moveAngle = 0;
+    /** True if the player pressed any movement key this tick. */
+    boolean isMoving = false;
+
     void move(boolean wPressed, boolean aPressed, boolean sPressed, boolean dPressed, int[][] mapArray) {
-        if (wPressed) {
-            if (mapArray[(int) (y)][(int) (x)] == 1) {
-                y -= .1;
-            }
-        }
-        if (aPressed) {
-            if (mapArray[(int) (y + .3)][(int) (x - .4)] == 1) {
-                x -= .1;
-            }
-        }
-        if (sPressed) {
-            if (mapArray[(int) (y + 1.1)][(int) (x)] == 1) {
-                y += .1;
-            }
-        }
-        if (dPressed) {
-            if (mapArray[(int) (y + .3)][(int) (x + 0.8)] == 1) {
-                x += .1;
-            }
-        }
+        double dx = 0, dy = 0;
+        if (wPressed) { dy -= 1; if (mapArray[(int)(y)][(int)(x)] == 1)         y -= .1; }
+        if (sPressed) { dy += 1; if (mapArray[(int)(y + 1.1)][(int)(x)] == 1)   y += .1; }
+        if (aPressed) { dx -= 1; if (mapArray[(int)(y + .3)][(int)(x - .4)] == 1) x -= .1; }
+        if (dPressed) { dx += 1; if (mapArray[(int)(y + .3)][(int)(x + 0.8)] == 1) x += .1; }
+
+        isMoving = (dx != 0 || dy != 0);
+        if (isMoving) moveAngle = Math.atan2(dy, dx);
     }
 
     void checkEnemyCollision(ArrayList<Enemy> enemies) {
@@ -68,7 +152,6 @@ class Player extends Damageable {
         }
         Enemy closest = enemies.get(0);
         double closestDist = 100;
-        System.out.println("attacked");
         for (Enemy enemy : enemies) {
             if (enemy.dist < closestDist) {
                 closestDist = enemy.dist;
@@ -140,10 +223,6 @@ class Player extends Damageable {
                 double dy = projectile.y - enemy.y;
                 double dist = Math.sqrt(dx * dx + dy * dy);
 
-                System.out.println(dx);
-                System.out.println(dy);
-                System.out.println(dist);
-                System.out.println("############");
                 if (dist < 0.5) {
                     enemy.takeDamage(10);
                     projectiles.remove(i);

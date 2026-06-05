@@ -71,7 +71,10 @@ public class Map implements KeyListener {
 
         timer = new Timer(10, new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                player.move(WPressed, APressed, SPressed, DPressed, mapArray);
+                player.tickDash(mapArray);
+                if (!player.dashing) {
+                    player.move(WPressed, APressed, SPressed, DPressed, mapArray);
+                }
                 moveEnemies();
                 player.checkEnemyCollision(enemies);
                 int curTilesX = panel.getWidth() / tileSize + 1;
@@ -179,7 +182,7 @@ public class Map implements KeyListener {
             }
         }
         if (k == KeyEvent.VK_K) {
-            // TODO: Dash
+            player.startDash(mapArray);
         }
         if (k == KeyEvent.VK_L) {
             // TODO: Switch weapon — 0 - rapier, 1 - scythe, 2 - disc
@@ -234,7 +237,6 @@ public class Map implements KeyListener {
             while (difficultyValue < 30 && roomDifficulty > 0) { // spawn until room runs out or max difficulty reached
                 // TODO: refactor when new enemy types are coded
                 enemies.add(new Enemy(10, Math.random() * mapWidth, Math.random() * mapHeight));
-                System.out.println("Enemy spawned");
                 difficultyValue += 3;
                 roomDifficulty -= 3;
             }
@@ -288,6 +290,8 @@ public class Map implements KeyListener {
 
             tilesX = ((int) this.getWidth() / tileSize) + 1;
             tilesY = ((int) this.getHeight() / tileSize) + 1;
+
+            // Draw tiles
             for (int i = 0; i <= tilesY; i++) {
                 for (int j = 0; j <= tilesX; j++) {
                     if (!((int) player.x - (tilesX / 2) + j < 0
@@ -309,44 +313,76 @@ public class Map implements KeyListener {
                         }
                     }
                 }
-                if (player.attackHoldCounter > 300) {
-                    g.setColor(heavy);
-                    g.fillOval(this.getWidth() / 2, this.getHeight() / 2, 100, 100);
-                }
-                g.drawImage(playerSprite, this.getWidth() / 2 - 50, this.getHeight() / 2 - 50, 100, 100, null);
-
-                // Draw active attack animations
-                player.attackAnimations.drawStab(g2d);
-                player.attackAnimations.drawSwing(g2d, player.facingAngle);
-
-                // Draw all projectiles (rapier triangles and spinning disc squares)
-                for (Projectile projectile : player.projectiles) {
-                    int screenX = (int) ((projectile.x - player.x + tilesX / 2.0) * tileSize);
-                    int screenY = (int) ((projectile.y - player.y + tilesY / 2.0) * tileSize);
-                    if (projectile.isDisc) {
-                        AffineTransform old2 = g2d.getTransform();
-                        g2d.translate(screenX, screenY);
-                        g2d.rotate(projectile.rotation);
-                        g2d.setColor(Color.ORANGE);
-                        g2d.fillRect(-20, -20, 40, 40);
-                        g2d.setTransform(old2);
-                    } else {
-                        g.setColor(Color.red);
-                        Polygon p = new Polygon();
-                        p.addPoint(screenX, screenY);
-                        p.addPoint((int) (screenX + (-projectile.vy) * 25), (int) (screenY + projectile.vx * 25));
-                        p.addPoint((int) (screenX + projectile.vy * 25), (int) (screenY + (-projectile.vx) * 25));
-                        g.drawPolygon(p);
-                    }
-                }
-
-                g.setColor(Color.green);
-                for (Enemy enemy : enemies) {
-                    g.fillOval((int) ((enemy.x - player.x + tilesX / 2) * tileSize), (int) ((enemy.y - player.y + (tilesY / 2)) * tileSize), 50, 50);
-                }
-
-                this.setPreferredSize(new Dimension(panW, panH));
             }
+
+            // Draw player
+            if (player.attackHoldCounter > 300) {
+                g.setColor(heavy);
+                g.fillOval(this.getWidth() / 2, this.getHeight() / 2, 100, 100);
+            }
+            g.drawImage(playerSprite, this.getWidth() / 2 - 50, this.getHeight() / 2 - 50, 100, 100, null);
+
+            // Draw active attack animations
+            player.attackAnimations.drawStab(g2d);
+            player.attackAnimations.drawSwing(g2d, player.facingAngle);
+
+            // Draw all projectiles (rapier triangles and spinning disc squares)
+            for (Projectile projectile : player.projectiles) {
+                int screenX = (int) ((projectile.x - player.x + tilesX / 2.0) * tileSize);
+                int screenY = (int) ((projectile.y - player.y + tilesY / 2.0) * tileSize);
+                if (projectile.isDisc) {
+                    AffineTransform old2 = g2d.getTransform();
+                    g2d.translate(screenX, screenY);
+                    g2d.rotate(projectile.rotation);
+                    g2d.setColor(Color.ORANGE);
+                    g2d.fillRect(-20, -20, 40, 40);
+                    g2d.setTransform(old2);
+                } else {
+                    g.setColor(Color.red);
+                    Polygon p = new Polygon();
+                    p.addPoint(screenX, screenY);
+                    p.addPoint((int) (screenX + (-projectile.vy) * 25), (int) (screenY + projectile.vx * 25));
+                    p.addPoint((int) (screenX + projectile.vy * 25), (int) (screenY + (-projectile.vx) * 25));
+                    g.drawPolygon(p);
+                }
+            }
+
+            // Draw enemies
+            g.setColor(Color.green);
+            for (Enemy enemy : enemies) {
+                g.fillOval((int) ((enemy.x - player.x + tilesX / 2) * tileSize), (int) ((enemy.y - player.y + (tilesY / 2)) * tileSize), 50, 50);
+            }
+
+            // --- Dash cooldown bar (bottom-right) ---
+            int barW = 160;
+            int barH = 16;
+            int barX = panW - barW - 20;
+            int barY = panH - barH - 20;
+            float dashFill = player.dashCooldownFraction();
+            boolean dashReady = dashFill >= 1f;
+
+            // Background track
+            g2d.setColor(new Color(30, 30, 30, 200));
+            g2d.fillRoundRect(barX - 2, barY - 2, barW + 4, barH + 4, 8, 8);
+
+            // Filled portion
+            Color barColor = dashReady ? new Color(100, 210, 255) : new Color(60, 130, 200);
+            g2d.setColor(barColor);
+            g2d.fillRoundRect(barX, barY, (int)(barW * dashFill), barH, 6, 6);
+
+            // Pulse/glow outline when ready
+            if (dashReady) {
+                g2d.setColor(new Color(180, 240, 255, 160));
+                g2d.setStroke(new BasicStroke(2f));
+                g2d.drawRoundRect(barX - 2, barY - 2, barW + 4, barH + 4, 8, 8);
+                g2d.setStroke(new BasicStroke(1f));
+            }
+
+            // Label
+            g2d.setColor(Color.WHITE);
+            g2d.setFont(new Font("SansSerif", Font.BOLD, 11));
+            String label = dashReady ? "DASH  [K]" : "DASH";
+            g2d.drawString(label, barX, barY - 5);
         }
     }
 }
