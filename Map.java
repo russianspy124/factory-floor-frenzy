@@ -10,44 +10,99 @@ import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
 
+/**
+ * Top-level game class. Owns the window, game loop, map data, player, and enemy list.
+ * Also implements KeyListener directly so all input handling stays in one place.
+ * The inner DrawPanel handles all rendering and is kept as an inner class so it
+ * can read game state without needing explicit references passed around.
+ * The world uses a tile-based coordinate system where one unit equals one tile.
+ * TILE_SIZE converts between world units and screen pixels.
+ */
 public class Map implements KeyListener {
 
     // --- Map layout ---
-    static final int MAP_WIDTH = 15;
+
+    /** Number of tiles in the map along the X axis. */
+    static final int MAP_WIDTH  = 15;
+
+    /** Number of tiles in the map along the Y axis. */
     static final int MAP_HEIGHT = 9;
-    static final int TILE_SIZE = 100;
+
+    /** Pixel size of one world tile. Controls zoom level for the entire game. */
+    static final int TILE_SIZE  = 100;
+
+    /** The loaded tile grid. Values: 0 = void, 1 = floor, 2 = wall. */
     int[][] mapGrid = new int[MAP_HEIGHT][MAP_WIDTH];
 
     // --- Difficulty / spawning ---
+
+    /**
+     * Sum of ENEMY_COST for all currently live enemies.
+     * Compared against SPAWN_THRESHOLD to decide when to spawn more.
+     */
     int activeDifficulty = 0;
+
+    /** Remaining "budget" of difficulty points available to spend on future spawns. */
     int remainingDifficulty = 50;
-    static final int SPAWN_THRESHOLD = 15; // spawn a new wave when enemy count drops below this
-    static final int MAX_DIFFICULTY = 30;
-    static final int ENEMY_COST = 3;
+
+    /** Spawn a new wave when activeDifficulty drops below this value. */
+    static final int SPAWN_THRESHOLD = 15;
+
+    /** Maximum allowed value of activeDifficulty at any one time. */
+    static final int MAX_DIFFICULTY  = 30;
+
+    /** Difficulty points each enemy costs when spawned (and refunds when killed). */
+    static final int ENEMY_COST      = 3;
 
     // --- Core objects ---
+
+    /** The player character. */
     Player player = new Player(100);
+
+    /** All enemies currently alive in the world. */
     ArrayList<Enemy> enemies = new ArrayList<>();
+
+    /** The player sprite, loaded once at startup. */
     BufferedImage playerSprite = loadImage("playerOne.png");
 
     // --- Input state ---
+
+    /** {@code true} while the corresponding movement key is held down. */
     boolean upHeld, leftHeld, downHeld, rightHeld;
 
     // --- Window ---
+
+    /** The top-level application window. */
     JFrame window;
+
+    /** The panel that handles all game rendering. */
     DrawPanel panel;
+
+    /** The Swing timer that drives the game loop at ~100 ticks per second. */
     Timer gameLoop;
 
     // --- Pause ---
+
+    /** The pause menu window, created on demand and disposed on resume. */
     JFrame pauseWindow;
+
+    /** {@code true} while the game is paused; prevents tick processing. */
     boolean paused = false;
 
     // -------------------------------------------------------------------------
 
+    /**
+     * Entry point. Constructs the game on the Swing event dispatch thread.
+     * @param args command-line arguments (unused)
+     */
     public static void main(String[] args) {
         SwingUtilities.invokeLater(Map::new);
     }
 
+    /**
+     * Constructs the game: loads the map, positions the player, creates the window,
+     * and starts the game loop.
+     */
     Map() {
         loadMap("sampleMap.txt");
 
@@ -72,6 +127,12 @@ public class Map implements KeyListener {
     // Game loop
     // -------------------------------------------------------------------------
 
+    /**
+     * Advances the game by one tick. Called by the Swing timer every 10 ms.
+     * Order of operations matters here: the dash moves the player before normal
+     * movement input is processed, projectiles move before hit detection runs,
+     * and dead enemies are removed after spawning so the difficulty budget stays accurate.
+     */
     private void tick() {
         player.tickDash(mapGrid);
         if (!player.dashing) player.move(upHeld, leftHeld, downHeld, rightHeld, mapGrid);
@@ -80,7 +141,7 @@ public class Map implements KeyListener {
 
         player.checkEnemyCollision(enemies);
 
-        int visibleTilesX = panel.getWidth() / TILE_SIZE + 1;
+        int visibleTilesX = panel.getWidth()  / TILE_SIZE + 1;
         int visibleTilesY = panel.getHeight() / TILE_SIZE + 1;
         player.tickAttack(enemies, TILE_SIZE, visibleTilesX, visibleTilesY);
 
@@ -99,15 +160,25 @@ public class Map implements KeyListener {
     // Enemy spawning
     // -------------------------------------------------------------------------
 
+    /**
+     * Spawns enemies if the active difficulty is below SPAWN_THRESHOLD,
+     * spending from remainingDifficulty until the cap or budget is reached.
+     * Each spawned enemy increases activeDifficulty by ENEMY_COST.
+     */
     private void spawnEnemies() {
         if (activeDifficulty >= SPAWN_THRESHOLD) return;
         while (activeDifficulty < MAX_DIFFICULTY && remainingDifficulty > 0) {
             enemies.add(new Enemy(10, Math.random() * MAP_WIDTH, Math.random() * MAP_HEIGHT));
-            activeDifficulty += ENEMY_COST;
+            activeDifficulty    += ENEMY_COST;
             remainingDifficulty -= ENEMY_COST;
         }
     }
 
+    /**
+     * Removes all enemies whose HP has reached zero or below, refunding their
+     * difficulty cost to activeDifficulty so new enemies can spawn.
+     * Iterates in reverse so removal by index is safe.
+     */
     private void removeDeadEnemies() {
         for (int i = enemies.size() - 1; i >= 0; i--) {
             if (!enemies.get(i).alive()) {
@@ -121,6 +192,11 @@ public class Map implements KeyListener {
     // Map loading
     // -------------------------------------------------------------------------
 
+    /**
+     * Reads a plain-text tile map from disk and populates mapGrid.
+     * Each character in the file is interpreted as a single digit (0, 1, or 2).
+     * @param filename path to the map file, relative to the working directory
+     */
     private void loadMap(String filename) {
         try (BufferedReader reader = new BufferedReader(new FileReader(filename))) {
             for (int row = 0; row < MAP_HEIGHT; row++) {
@@ -134,6 +210,12 @@ public class Map implements KeyListener {
         }
     }
 
+    /**
+     * Loads an image from disk and returns it as a BufferedImage.
+     * Shows an error dialog and returns {@code null} if the file cannot be read.
+     * @param filename path to the image file, relative to the working directory
+     * @return the loaded image, or {@code null} on failure
+     */
     private static BufferedImage loadImage(String filename) {
         try {
             return ImageIO.read(new File(filename));
@@ -147,6 +229,13 @@ public class Map implements KeyListener {
     // Pause menu
     // -------------------------------------------------------------------------
 
+    /**
+     * Opens the pause menu in a small secondary window and stops the game loop.
+     * Does nothing if the game is already paused.
+     * The pause window captures keyboard input and listens for:
+     *   {@code P} — resume the game and close the window
+     *   {@code O} — quit the application
+     */
     private void openPauseMenu() {
         if (paused) return;
 
@@ -160,14 +249,13 @@ public class Map implements KeyListener {
         pauseWindow.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
 
         JLabel hint = new JLabel(
-                "<html><center>P — Resume<br><br>O — Quit</center></html>",
-                SwingConstants.CENTER
+            "<html><center>P — Resume<br><br>O — Quit</center></html>",
+            SwingConstants.CENTER
         );
         pauseWindow.add(hint);
 
         pauseWindow.addKeyListener(new KeyAdapter() {
-            @Override
-            public void keyPressed(KeyEvent e) {
+            @Override public void keyPressed(KeyEvent e) {
                 if (e.getKeyCode() == KeyEvent.VK_P) {
                     paused = false;
                     gameLoop.start();
@@ -179,10 +267,7 @@ public class Map implements KeyListener {
         });
 
         pauseWindow.addWindowListener(new WindowAdapter() {
-            @Override
-            public void windowOpened(WindowEvent e) {
-                pauseWindow.requestFocusInWindow();
-            }
+            @Override public void windowOpened(WindowEvent e) { pauseWindow.requestFocusInWindow(); }
         });
 
         pauseWindow.setFocusable(true);
@@ -195,30 +280,23 @@ public class Map implements KeyListener {
     // Input
     // -------------------------------------------------------------------------
 
+    /**
+     * Handles key-press events. Activates movement flags, triggers attacks and dash,
+     * and cycles the weapon.
+     * @param e the key event from Swing
+     */
     @Override
     public void keyPressed(KeyEvent e) {
         switch (e.getKeyCode()) {
-            case KeyEvent.VK_P:
-                openPauseMenu();
-                break;
-            case KeyEvent.VK_W:
-                upHeld = true;
-                break;
-            case KeyEvent.VK_A:
-                leftHeld = true;
-                break;
-            case KeyEvent.VK_S:
-                downHeld = true;
-                break;
-            case KeyEvent.VK_D:
-                rightHeld = true;
-                break;
+            case KeyEvent.VK_P: openPauseMenu();              break;
+            case KeyEvent.VK_W: upHeld    = true;             break;
+            case KeyEvent.VK_A: leftHeld  = true;             break;
+            case KeyEvent.VK_S: downHeld  = true;             break;
+            case KeyEvent.VK_D: rightHeld = true;             break;
             case KeyEvent.VK_J:
                 if (player.attackCooldown <= 0) player.attackHeld = true;
                 break;
-            case KeyEvent.VK_K:
-                player.startDash(mapGrid);
-                break;
+            case KeyEvent.VK_K: player.startDash(mapGrid);    break;
             case KeyEvent.VK_L:
                 player.weaponChoice = (player.weaponChoice + 1) % 3;
                 break;
@@ -228,58 +306,79 @@ public class Map implements KeyListener {
         }
     }
 
+    /**
+     * Handles key-release events. Clears movement flags and fires the attack
+     * when the attack button is released.
+     * @param e the key event from Swing
+     */
     @Override
     public void keyReleased(KeyEvent e) {
         switch (e.getKeyCode()) {
-            case KeyEvent.VK_W:
-                upHeld = false;
-                break;
-            case KeyEvent.VK_A:
-                leftHeld = false;
-                break;
-            case KeyEvent.VK_S:
-                downHeld = false;
-                break;
-            case KeyEvent.VK_D:
-                rightHeld = false;
-                break;
+            case KeyEvent.VK_W: upHeld    = false; break;
+            case KeyEvent.VK_A: leftHeld  = false; break;
+            case KeyEvent.VK_S: downHeld  = false; break;
+            case KeyEvent.VK_D: rightHeld = false; break;
             case KeyEvent.VK_J:
                 if (player.attackHeld && player.attackCooldown <= 0) {
                     player.attack(player.attackHoldCounter > 300, enemies);
-                    player.attackHeld = false;
+                    player.attackHeld        = false;
                     player.attackHoldCounter = 0;
                 }
                 break;
         }
     }
 
-    @Override
-    public void keyTyped(KeyEvent e) {
-    }
+    /**
+     * Required by KeyListener; no action needed for typed events.
+     * @param e the key event from Swing
+     */
+    @Override public void keyTyped(KeyEvent e) {}
 
     // -------------------------------------------------------------------------
     // Rendering
     // -------------------------------------------------------------------------
 
+    /**
+     * The panel that renders the entire game each frame.
+     * All drawing is broken into private helpers so paintComponent reads
+     * as a clear list of layers drawn bottom-to-top: map tiles → player → projectiles
+     * → enemies → HUD → game-over overlay.
+     * This is an inner class so it can read the outer Map's fields
+     * (player, enemies, mapGrid, etc.) without needing explicit references.
+     */
     class DrawPanel extends JPanel {
 
-        private static final Color FLOOR_COLOR = new Color(138, 65, 51);
-        private static final Color WALL_COLOR = new Color(199, 93, 72);
+        /** Tile colour for floor tiles (tile value 1). */
+        private static final Color FLOOR_COLOR = new Color(138, 65,  51);
+
+        /** Tile colour for wall tiles (tile value 2). */
+        private static final Color WALL_COLOR  = new Color(199, 93,  72);
+
+        /** Colour of the charging glow shown when a heavy attack is being charged. */
         private static final Color HEAVY_COLOR = new Color(255, 255, 255, 100);
 
+        /**
+         * Creates the draw panel with a sensible default size.
+         * The window is immediately maximised, so this size is only briefly visible.
+         */
         DrawPanel() {
             setPreferredSize(new Dimension(800, 500));
             setBackground(Color.BLACK);
         }
 
+        /**
+         * Renders one complete frame. Called by Swing in response to repaint.
+         * Enables antialiasing for smoother edges on rotated shapes.
+         * @param g the graphics context provided by Swing
+         */
         @Override
         public void paintComponent(Graphics g) {
             super.paintComponent(g);
             Graphics2D g2d = (Graphics2D) g;
             g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
-            int w = getWidth();
-            int h = getHeight();
+            int w      = getWidth();
+            int h      = getHeight();
             int tilesX = w / TILE_SIZE + 1;
             int tilesY = h / TILE_SIZE + 1;
 
@@ -293,6 +392,16 @@ public class Map implements KeyListener {
             if (!player.alive()) drawGameOver(g2d, w, h);
         }
 
+        /**
+         * Draws all visible map tiles. Only tiles within the viewport are drawn;
+         * out-of-bounds map coordinates are silently skipped.
+         * The camera is centred on the player: each tile's screen position is
+         * computed by subtracting the player's sub-tile offset ({@code player.x % 1})
+         * so the world scrolls smoothly rather than snapping tile-by-tile.
+         * @param g      the graphics context to draw into
+         * @param tilesX number of tiles visible horizontally
+         * @param tilesY number of tiles visible vertically
+         */
         private void drawMap(Graphics g, int tilesX, int tilesY) {
             for (int row = 0; row <= tilesY; row++) {
                 for (int col = 0; col <= tilesX; col++) {
@@ -304,21 +413,22 @@ public class Map implements KeyListener {
                     int screenY = (int) ((row - player.y % 1) * TILE_SIZE);
 
                     switch (mapGrid[mapRow][mapCol]) {
-                        case 1:
-                            g.setColor(FLOOR_COLOR);
-                            g.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
-                            break;
-                        case 2:
-                            g.setColor(WALL_COLOR);
-                            g.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
-                            break;
+                        case 1: g.setColor(FLOOR_COLOR); g.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE); break;
+                        case 2: g.setColor(WALL_COLOR);  g.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE); break;
                     }
                 }
             }
         }
 
+        /**
+         * Draws the player sprite at the centre of the screen, along with any
+         * active attack animations (stab or swing). Also draws the heavy-attack
+         * charge glow if the player has held the attack button long enough.
+         * @param g   the graphics context for image and glow drawing
+         * @param g2d the 2D context for transformed attack animations
+         */
         private void drawPlayer(Graphics g, Graphics2D g2d) {
-            int cx = getWidth() / 2;
+            int cx = getWidth()  / 2;
             int cy = getHeight() / 2;
 
             if (player.attackHoldCounter > 300) {
@@ -332,6 +442,15 @@ public class Map implements KeyListener {
             player.attackAnimations.drawSwing(g2d, player.facingAngle);
         }
 
+        /**
+         * Draws all live projectiles in screen space.
+         *   Disc — an orange square that rotates each tick.
+         *   Rapier bolt — a red triangle whose tip points in the direction of travel.
+         * @param g      the graphics context for polygon drawing
+         * @param g2d    the 2D context for rotated disc drawing
+         * @param tilesX number of tiles visible horizontally, used for world-to-screen conversion
+         * @param tilesY number of tiles visible vertically, used for world-to-screen conversion
+         */
         private void drawProjectiles(Graphics g, Graphics2D g2d, int tilesX, int tilesY) {
             for (Projectile p : player.projectiles) {
                 int sx = (int) ((p.x - player.x + tilesX / 2.0) * TILE_SIZE);
@@ -345,7 +464,6 @@ public class Map implements KeyListener {
                     g2d.fillRect(-20, -20, 40, 40);
                     g2d.setTransform(saved);
                 } else {
-                    // Rapier bolt drawn as a small triangle pointing in the direction of travel
                     g.setColor(Color.RED);
                     Polygon bolt = new Polygon();
                     bolt.addPoint(sx, sy);
@@ -356,6 +474,12 @@ public class Map implements KeyListener {
             }
         }
 
+        /**
+         * Draws all live enemies as green ovals in screen space.
+         * @param g      the graphics context to draw into
+         * @param tilesX number of tiles visible horizontally, used for world-to-screen conversion
+         * @param tilesY number of tiles visible vertically, used for world-to-screen conversion
+         */
         private void drawEnemies(Graphics g, int tilesX, int tilesY) {
             g.setColor(Color.GREEN);
             for (Enemy enemy : enemies) {
@@ -365,29 +489,40 @@ public class Map implements KeyListener {
             }
         }
 
+        /**
+         * Draws all HUD elements. Currently delegates to the health bar and dash bar.
+         * @param g2d the 2D graphics context to draw into
+         * @param w   panel width in pixels
+         * @param h   panel height in pixels
+         */
         private void drawHUD(Graphics2D g2d, int w, int h) {
             drawHealthBar(g2d, h);
             drawDashBar(g2d, w, h);
         }
 
+        /**
+         * Draws the health bar in the bottom-left corner of the screen.
+         * The fill colour shifts from green to yellow to red as HP drops below
+         * 50% and 25% respectively. The bar outline flashes white while the player
+         * has active i-frames, giving clear visual feedback of invulnerability.
+         * @param g2d the 2D graphics context to draw into
+         * @param h   panel height in pixels, used to position the bar near the bottom
+         */
         private void drawHealthBar(Graphics2D g2d, int h) {
             int barW = 200, barH = 16;
             int barX = 20, barY = h - barH - 20;
             float fill = Math.max(0f, (float) player.hp / player.maxHp);
 
-            // Track
             g2d.setColor(new Color(30, 30, 30, 200));
             g2d.fillRoundRect(barX - 2, barY - 2, barW + 4, barH + 4, 8, 8);
 
-            // Fill — shifts from green to yellow to red as HP falls
             Color fillColor;
-            if (fill > 0.5f) fillColor = new Color(60, 200, 80);
+            if      (fill > 0.5f)  fillColor = new Color(60,  200, 80);
             else if (fill > 0.25f) fillColor = new Color(220, 180, 0);
-            else fillColor = new Color(210, 50, 50);
+            else                   fillColor = new Color(210, 50,  50);
             g2d.setColor(fillColor);
             g2d.fillRoundRect(barX, barY, (int) (barW * fill), barH, 6, 6);
 
-            // Flashing outline during i-frames
             if (player.iFrames > 0 && (player.iFrames / 4) % 2 == 0) {
                 g2d.setColor(new Color(255, 255, 255, 180));
                 g2d.setStroke(new BasicStroke(2f));
@@ -400,22 +535,28 @@ public class Map implements KeyListener {
             g2d.drawString("HP  " + Math.max(0, player.hp) + " / " + player.maxHp, barX, barY - 5);
         }
 
+        /**
+         * Draws the dash cooldown bar in the bottom-right corner of the screen.
+         * The bar fills from left to right as the cooldown expires. When the dash
+         * is fully ready, the bar turns bright blue and gains a glowing outline, and
+         * the label updates to show the keybind as a reminder.
+         * @param g2d the 2D graphics context to draw into
+         * @param w   panel width in pixels, used to position the bar near the right edge
+         * @param h   panel height in pixels, used to position the bar near the bottom
+         */
         private void drawDashBar(Graphics2D g2d, int w, int h) {
             int barW = 160, barH = 16;
             int barX = w - barW - 20;
             int barY = h - barH - 20;
-            float fill = player.dashReadiness();
+            float fill    = player.dashReadiness();
             boolean ready = fill >= 1f;
 
-            // Track
             g2d.setColor(new Color(30, 30, 30, 200));
             g2d.fillRoundRect(barX - 2, barY - 2, barW + 4, barH + 4, 8, 8);
 
-            // Fill
             g2d.setColor(ready ? new Color(100, 210, 255) : new Color(60, 130, 200));
             g2d.fillRoundRect(barX, barY, (int) (barW * fill), barH, 6, 6);
 
-            // Glow outline when ready
             if (ready) {
                 g2d.setColor(new Color(180, 240, 255, 160));
                 g2d.setStroke(new BasicStroke(2f));
@@ -428,6 +569,13 @@ public class Map implements KeyListener {
             g2d.drawString(ready ? "DASH  [K]" : "DASH", barX, barY - 5);
         }
 
+        /**
+         * Draws a semi-transparent dark overlay and a centred "GAME OVER" message.
+         * Rendered on top of all other layers when the player's HP reaches zero.
+         * @param g2d the 2D graphics context to draw into
+         * @param w   panel width in pixels, used to centre the text
+         * @param h   panel height in pixels, used to centre the text
+         */
         private void drawGameOver(Graphics2D g2d, int w, int h) {
             g2d.setColor(new Color(0, 0, 0, 160));
             g2d.fillRect(0, 0, w, h);
@@ -438,8 +586,8 @@ public class Map implements KeyListener {
             int tx = (w - fm.stringWidth(text)) / 2;
             int ty = h / 2 - 20;
 
-            g2d.setColor(new Color(180, 40, 40)); // drop shadow
-            g2d.drawString(text, tx + 3, ty + 3);
+            g2d.setColor(new Color(180, 40, 40));
+            g2d.drawString(text, tx + 3, ty + 3); // drop shadow
             g2d.setColor(Color.WHITE);
             g2d.drawString(text, tx, ty);
         }

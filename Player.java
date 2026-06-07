@@ -1,50 +1,110 @@
 import java.util.ArrayList;
 
+/**
+ * The player character, controlled via keyboard input.
+ * Responsibilities managed here:
+ *   Tile-collision movement (WASD)
+ *   Dash — a short burst of fast movement with built-in i-frames
+ *   Attacking with the rapier, scythe, or disc (weaponChoice)
+ *   Receiving contact damage from enemies and enforcing i-frame protection
+ *   Owning and updating all active Projectile instances
+ * The player is always rendered at the centre of the screen; the camera
+ * follows by offsetting every other world object relative to x/y.
+ */
 class Player extends Damageable {
 
-    // World position
+    /** World-space position. The camera is centred on this point. */
     double x, y;
 
-    // Knockback velocity (currently tracked but not yet applied)
+    /**
+     * Pending knockback velocity in world units per tick.
+     * Currently stored but not yet applied to movement.
+     */
     double kbX = 0, kbY = 0;
 
-    // Weapon selection: 0 = rapier, 1 = scythe, 2 = disc
+    /**
+     * Active weapon slot.
+     *   0 — rapier (fast bolt)
+     *   1 — scythe (wide swing arc)
+     *   2 — disc   (slow, long-range projectile)
+     */
     int weaponChoice = 0;
 
-    // Attack state
+    /** Ticks remaining until the next attack is allowed. Counts down to zero. */
     int attackCooldown = 0;
+
+    /** Ticks the attack button has been held this press, used to distinguish heavy attacks. */
     int attackHoldCounter = 0;
+
+    /** {@code true} while the attack button is held but not yet released. */
     boolean attackHeld = false;
 
-    // The angle toward the last targeted enemy, used by attack animations
+    /**
+     * Angle (radians) from the player toward the last targeted enemy.
+     * Updated on each attack and used to orient attack animations.
+     */
     double facingAngle = 0;
 
-    // Movement state — updated each tick by move()
+    /**
+     * Angle (radians) of the most recent WASD input direction.
+     * Updated each tick by move and used to aim the dash.
+     */
     double moveAngle = 0;
+
+    /** {@code true} if at least one movement key was held during the last move call. */
     boolean isMoving = false;
 
-    // Invincibility frames — while positive, the player takes no damage
+    /**
+     * Remaining invincibility frames. While positive the player cannot take damage
+     * from enemy contact, and the health bar outline flashes white.
+     * Decremented each tick by checkEnemyCollision.
+     */
     int iFrames = 0;
 
+    /** Collision hitbox, used for future wall/object interactions. */
     Hitbox hitbox = new Hitbox(0, 0, 100, 100);
+
+    /** All projectiles currently alive in the world, owned by the player. */
     ArrayList<Projectile> projectiles = new ArrayList<>();
+
+    /** Manages the visual swing and stab animations for the equipped weapon. */
     AttackAnimations attackAnimations;
 
-    // --- Weapon range limits ---
-    private static final double RAPIER_MAX_RANGE = 3.0; // world units
-    private static final double DISC_MAX_RANGE = 6.0; // world units
+    // --- Weapon range limits (world units) ---
+
+    /** Maximum distance a rapier bolt travels before it disappears. */
+    private static final double RAPIER_MAX_RANGE = 3.0;
+
+    /** Maximum distance a disc travels from its spawn point before it disappears. */
+    private static final double DISC_MAX_RANGE = 6.0;
 
     // --- Dash tuning ---
-    private static final double DASH_DISTANCE = 2.5;  // world units per dash
-    private static final double DASH_SPEED = 0.35; // world units per tick
-    private static final int DASH_COOLDOWN = 120;  // ticks between dashes
 
+    /** Total world units covered by a single dash. */
+    private static final double DASH_DISTANCE = 2.5;
+
+    /** World units moved per tick during a dash. */
+    private static final double DASH_SPEED = 0.35;
+
+    /** Ticks the player must wait between dashes. */
+    private static final int DASH_COOLDOWN = 120;
+
+    /** {@code true} while the player is actively dashing. */
     boolean dashing = false;
-    int dashCooldown = 0;
-    private double dashRemaining = 0;
-    private double dashDirX = 0;
-    private double dashDirY = 0;
 
+    /** Ticks remaining until the next dash is available. */
+    int dashCooldown = 0;
+
+    /** World units still to be covered in the current dash. */
+    private double dashRemaining = 0;
+
+    /** Unit vector in the direction of the current dash. */
+    private double dashDirX = 0, dashDirY = 0;
+
+    /**
+     * Creates a new player with the given starting HP.
+     * @param hp starting (and maximum) hit points
+     */
     Player(int hp) {
         super(hp);
         attackAnimations = new AttackAnimations(0, 0);
@@ -54,30 +114,37 @@ class Player extends Damageable {
     // Movement
     // -------------------------------------------------------------------------
 
+    /**
+     * Moves the player according to held direction keys, checking tile collision
+     * before each axis step. Also records the current movement angle for use by
+     * startDash.
+     * Each direction is tested and applied independently, which lets the player
+     * slide along walls when a diagonal is partially blocked.
+     * @param up    {@code true} if the up/W key is held
+     * @param left  {@code true} if the left/A key is held
+     * @param down  {@code true} if the down/S key is held
+     * @param right {@code true} if the right/D key is held
+     * @param map   the tile grid used for walkability checks (1 = walkable)
+     */
     void move(boolean up, boolean left, boolean down, boolean right, int[][] map) {
         double dx = 0, dy = 0;
 
-        if (up) {
-            dy -= 1;
-            if (walkable(map, x, y - 0.1)) y -= 0.1;
-        }
-        if (down) {
-            dy += 1;
-            if (walkable(map, x, y + 1.1)) y += 0.1;
-        }
-        if (left) {
-            dx -= 1;
-            if (walkable(map, x - 0.4, y + 0.3)) x -= 0.1;
-        }
-        if (right) {
-            dx += 1;
-            if (walkable(map, x + 0.8, y + 0.3)) x += 0.1;
-        }
+        if (up)    { dy -= 1; if (walkable(map, x,       y - 0.1)) y -= 0.1; }
+        if (down)  { dy += 1; if (walkable(map, x,       y + 1.1)) y += 0.1; }
+        if (left)  { dx -= 1; if (walkable(map, x - 0.4, y + 0.3)) x -= 0.1; }
+        if (right) { dx += 1; if (walkable(map, x + 0.8, y + 0.3)) x += 0.1; }
 
         isMoving = (dx != 0 || dy != 0);
         if (isMoving) moveAngle = Math.atan2(dy, dx);
     }
 
+    /**
+     * Returns {@code true} if the given world-space point is on a walkable tile.
+     * @param map the tile grid (1 = walkable)
+     * @param wx  world X coordinate to test
+     * @param wy  world Y coordinate to test
+     * @return {@code true} if the tile at (wx, wy) is walkable
+     */
     private boolean walkable(int[][] map, double wx, double wy) {
         return map[(int) wy][(int) wx] == 1;
     }
@@ -86,14 +153,22 @@ class Player extends Damageable {
     // Dash
     // -------------------------------------------------------------------------
 
+    /**
+     * Begins a dash if one is not already active and the cooldown has expired.
+     * The dash direction is the current moveAngle if the player is moving,
+     * or facingAngle as a fallback when standing still. Any active attack
+     * animation is cancelled immediately, and i-frames are granted for the full
+     * dash duration plus a short buffer.
+     * @param map the tile grid used for collision during the dash
+     */
     void startDash(int[][] map) {
         if (dashing || dashCooldown > 0) return;
 
         attackAnimations.cancelAll();
-        attackHeld = false;
+        attackHeld        = false;
         attackHoldCounter = 0;
 
-        dashing = true;
+        dashing       = true;
         dashRemaining = DASH_DISTANCE;
 
         double angle = isMoving ? moveAngle : facingAngle;
@@ -104,42 +179,55 @@ class Player extends Damageable {
         iFrames = Math.max(iFrames, dashDuration + 5);
     }
 
+    /**
+     * Advances the dash by one game tick. Moves the player up to DASH_SPEED
+     * world units along the dash direction, with axis-sliding collision so the player
+     * glides along walls rather than stopping dead.
+     * Must be called every tick regardless of whether a dash is active, because
+     * it also decrements dashCooldown.
+     * @param map the tile grid used for collision
+     */
     void tickDash(int[][] map) {
         if (dashCooldown > 0) dashCooldown--;
         if (!dashing) return;
 
         double step = Math.min(DASH_SPEED, dashRemaining);
-        double nx = x + dashDirX * step;
-        double ny = y + dashDirY * step;
+        double nx   = x + dashDirX * step;
+        double ny   = y + dashDirY * step;
 
-        if (walkable(map, nx, ny)) {
-            x = nx;
-            y = ny;
-        } else if (walkable(map, nx, y)) {
-            x = nx;
-        } else if (walkable(map, x, ny)) {
-            y = ny;
-        } else {
-            dashRemaining = 0;
-        } // hit a wall — stop early
+        if      (walkable(map, nx, ny)) { x = nx; y = ny; }
+        else if (walkable(map, nx, y))  { x = nx; }          // slide horizontally
+        else if (walkable(map, x,  ny)) { y = ny; }          // slide vertically
+        else    { dashRemaining = 0; }                        // fully blocked — stop early
 
         dashRemaining -= step;
         if (dashRemaining <= 0) {
-            dashing = false;
+            dashing      = false;
             dashCooldown = DASH_COOLDOWN;
         }
     }
 
-    // 0.0 = on cooldown, 1.0 = ready
+    /**
+     * Returns how ready the dash is, as a fraction from 0.0 to 1.0.
+     * Used by the HUD to fill the dash cooldown bar.
+     * @return 0.0 when on cooldown or actively dashing; 1.0 when fully ready
+     */
     float dashReadiness() {
         if (dashing) return 0f;
         return 1f - (float) dashCooldown / DASH_COOLDOWN;
     }
 
     // -------------------------------------------------------------------------
-    // Combat — player taking damage
+    // Combat — receiving damage
     // -------------------------------------------------------------------------
 
+    /**
+     * Checks whether any enemy is touching the player and applies contact damage
+     * if i-frames have expired. Only one enemy can deal damage per call.
+     * I-frames are consumed by decrementing iFrames each tick regardless
+     * of whether contact occurs, so they expire naturally over time.
+     * @param enemies the current list of live enemies
+     */
     void checkEnemyCollision(ArrayList<Enemy> enemies) {
         if (iFrames > 0) {
             iFrames--;
@@ -149,52 +237,68 @@ class Player extends Damageable {
             if (enemy.isTouchingPlayer()) {
                 iFrames += 50;
                 takeDamage((int) Enemy.DAMAGE);
-                break; // one hit per collision frame
+                break;
             }
         }
     }
 
     // -------------------------------------------------------------------------
-    // Combat — player attacking
+    // Combat — attacking
     // -------------------------------------------------------------------------
 
+    /**
+     * Fires the current weapon toward the nearest enemy. Updates facingAngle
+     * as a side effect so attack animations know which way to point.
+     * @param heavy   {@code true} if the player held the attack button long enough
+     *                for a heavy attack (currently unused by most weapons)
+     * @param enemies the list of enemies to target; must not be empty
+     */
     void attack(boolean heavy, ArrayList<Enemy> enemies) {
         if (enemies.isEmpty()) return;
 
-        Enemy closest = findClosestEnemy(enemies);
+        Enemy closest      = findClosestEnemy(enemies);
         double closestDist = closest.distToPlayer;
-        facingAngle = Math.atan2(closest.y - y, closest.x - x);
+        facingAngle        = Math.atan2(closest.y - y, closest.x - x);
 
         switch (weaponChoice) {
-            case 0: // Rapier — fast bolt toward the nearest enemy
+            case 0: // Rapier — fast bolt fired directly at the nearest enemy
                 double rapierSpeed = 0.3;
                 projectiles.add(new Projectile(
-                        x, y,
-                        (closest.x - x) / closestDist * rapierSpeed,
-                        (closest.y - y) / closestDist * rapierSpeed
+                    x, y,
+                    (closest.x - x) / closestDist * rapierSpeed,
+                    (closest.y - y) / closestDist * rapierSpeed
                 ));
                 attackAnimations.startStab(facingAngle);
                 attackCooldown = 100;
                 break;
 
-            case 1: // Scythe — wide sweeping arc
+            case 1: // Scythe — wide arc that sweeps through a 180° arc
                 attackAnimations.startSwing(facingAngle);
                 attackCooldown = 100;
                 break;
 
-            case 2: // Disc — slower spinning projectile, travels farther
+            case 2: // Disc — slower spinning projectile that travels much farther
                 double discSpeed = 0.1;
                 projectiles.add(new Projectile(
-                        x, y,
-                        Math.cos(facingAngle) * discSpeed,
-                        Math.sin(facingAngle) * discSpeed,
-                        true
+                    x, y,
+                    Math.cos(facingAngle) * discSpeed,
+                    Math.sin(facingAngle) * discSpeed,
+                    true
                 ));
                 attackCooldown = 100;
                 break;
         }
     }
 
+    /**
+     * Advances all attack state by one tick: decrements the cooldown, increments the
+     * hold counter while the button is held, and updates any active animations.
+     * Also runs hit detection for the scythe swing in screen space.
+     * @param enemies  the live enemy list, checked for scythe hits
+     * @param tileSize pixel size of one world tile, used to convert to screen space
+     * @param tilesX   number of tiles visible horizontally, used for screen-space conversion
+     * @param tilesY   number of tiles visible vertically, used for screen-space conversion
+     */
     void tickAttack(ArrayList<Enemy> enemies, int tileSize, int tilesX, int tilesY) {
         if (attackCooldown > 0) attackCooldown--;
         if (attackHeld) attackHoldCounter++;
@@ -206,7 +310,7 @@ class Player extends Damageable {
             int[] screenX = new int[enemies.size()];
             int[] screenY = new int[enemies.size()];
             for (int i = 0; i < enemies.size(); i++) {
-                Enemy e = enemies.get(i);
+                Enemy e    = enemies.get(i);
                 screenX[i] = (int) ((e.x - x + tilesX / 2.0) * tileSize);
                 screenY[i] = (int) ((e.y - y + tilesY / 2.0) * tileSize);
             }
@@ -214,6 +318,12 @@ class Player extends Damageable {
         }
     }
 
+    /**
+     * Finds the enemy with the smallest distToPlayer.
+     * Assumes the list is non-empty.
+     * @param enemies a non-empty list of enemies
+     * @return the closest enemy to the player
+     */
     private Enemy findClosestEnemy(ArrayList<Enemy> enemies) {
         Enemy closest = enemies.get(0);
         for (Enemy e : enemies) {
@@ -226,16 +336,25 @@ class Player extends Damageable {
     // Projectiles
     // -------------------------------------------------------------------------
 
+    /**
+     * Advances every live projectile by one tick (moves it along its velocity vector).
+     */
     void moveProjectiles() {
         for (Projectile p : projectiles) p.move();
     }
 
+    /**
+     * Tests every projectile against every enemy and removes the projectile and
+     * damages the enemy on the first hit found (one hit per projectile per tick).
+     * Iterates in reverse so removal by index is safe.
+     * @param enemies the live enemy list
+     */
     void checkProjectileHits(ArrayList<Enemy> enemies) {
         for (int i = projectiles.size() - 1; i >= 0; i--) {
             Projectile p = projectiles.get(i);
             for (Enemy enemy : enemies) {
-                double dx = p.x - enemy.x;
-                double dy = p.y - enemy.y;
+                double dx   = p.x - enemy.x;
+                double dy   = p.y - enemy.y;
                 double dist = Math.sqrt(dx * dx + dy * dy);
                 if (dist < 0.5) {
                     enemy.takeDamage(10);
@@ -246,6 +365,11 @@ class Player extends Damageable {
         }
     }
 
+    /**
+     * Removes any projectile whose lifespan has reached zero or which has
+     * travelled beyond its type's maximum range. Iterates in reverse so
+     * removal by index is safe.
+     */
     void removeExpiredProjectiles() {
         for (int i = projectiles.size() - 1; i >= 0; i--) {
             Projectile p = projectiles.get(i);
