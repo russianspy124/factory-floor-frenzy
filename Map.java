@@ -54,6 +54,12 @@ public class Map implements KeyListener {
     /** Difficulty points each enemy costs when spawned (and refunds when killed). */
     static final int ENEMY_COST      = 3;
 
+    /** Points awarded to the player for each enemy killed. */
+    static final int POINTS_PER_KILL = 10;
+
+    /** The player's current score, incremented by POINTS_PER_KILL on each kill. */
+    int score = 0;
+
     // --- Core objects ---
 
     /** The player character. */
@@ -183,6 +189,7 @@ public class Map implements KeyListener {
         for (int i = enemies.size() - 1; i >= 0; i--) {
             if (!enemies.get(i).alive()) {
                 activeDifficulty -= ENEMY_COST;
+                score            += POINTS_PER_KILL;
                 enemies.remove(i);
             }
         }
@@ -498,6 +505,26 @@ public class Map implements KeyListener {
         private void drawHUD(Graphics2D g2d, int w, int h) {
             drawHealthBar(g2d, h);
             drawDashBar(g2d, w, h);
+            drawScore(g2d, w);
+        }
+
+        /**
+         * Draws the player's current score in the top-right corner of the screen.
+         *
+         * @param g2d the 2D graphics context to draw into
+         * @param w   panel width in pixels, used to right-align the text
+         */
+        private void drawScore(Graphics2D g2d, int w) {
+            String text = "SCORE  " + score;
+            g2d.setFont(new Font("SansSerif", Font.BOLD, 20));
+            FontMetrics fm = g2d.getFontMetrics();
+            int tx = w - fm.stringWidth(text) - 20;
+            int ty = 36;
+
+            g2d.setColor(new Color(0, 0, 0, 140));
+            g2d.drawString(text, tx + 2, ty + 2); // drop shadow
+            g2d.setColor(Color.WHITE);
+            g2d.drawString(text, tx, ty);
         }
 
         /**
@@ -590,6 +617,15 @@ public class Map implements KeyListener {
             g2d.drawString(text, tx + 3, ty + 3); // drop shadow
             g2d.setColor(Color.WHITE);
             g2d.drawString(text, tx, ty);
+
+            String scoreText = "SCORE  " + score;
+            g2d.setFont(new Font("SansSerif", Font.BOLD, 32));
+            fm = g2d.getFontMetrics();
+            int sx = (w - fm.stringWidth(scoreText)) / 2;
+            g2d.setColor(new Color(180, 40, 40));
+            g2d.drawString(scoreText, sx + 2, ty + 52);
+            g2d.setColor(Color.WHITE);
+            g2d.drawString(scoreText, sx, ty + 50);
         }
     }
 }
