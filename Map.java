@@ -60,6 +60,17 @@ public class Map implements KeyListener {
     /** The player's current score, incremented by POINTS_PER_KILL on each kill. */
     int score = 0;
 
+    /**
+     * Controls which screen is currently shown.
+     *   0 — start screen (title / main menu)
+     *   1 — rules screen
+     *   2 — playing
+     */
+    int gameState = 0;
+
+    /** Tick counter used to drive animations on the start screen. */
+    int screenTick = 0;
+
     // --- Core objects ---
 
     /** The player character. */
@@ -88,9 +99,6 @@ public class Map implements KeyListener {
     Timer gameLoop;
 
     // --- Pause ---
-
-    /** The pause menu window, created on demand and disposed on resume. */
-    JFrame pauseWindow;
 
     /** {@code true} while the game is paused; prevents tick processing. */
     boolean paused = false;
@@ -126,12 +134,32 @@ public class Map implements KeyListener {
         window.requestFocus();
 
         gameLoop = new Timer(10, e -> tick());
-        gameLoop.start();
+        gameLoop.start(); // drives start-screen animation; gameplay begins when J is pressed
     }
 
     // -------------------------------------------------------------------------
     // Game loop
     // -------------------------------------------------------------------------
+
+    /** Transitions from the start screen into the game. */
+    private void startGame() {
+        resetGame();
+        gameState = 2;
+    }
+
+    /** Resets all game state so a fresh run can begin. */
+    private void resetGame() {
+        score             = 0;
+        activeDifficulty  = 0;
+        remainingDifficulty = 50;
+        enemies.clear();
+        player            = new Player(100);
+        player.x          = 4;
+        player.y          = 4;
+        upHeld = leftHeld = downHeld = rightHeld = false;
+        paused            = false;
+        gameLoop.start();
+    }
 
     /**
      * Advances the game by one tick. Called by the Swing timer every 10 ms.
@@ -140,6 +168,9 @@ public class Map implements KeyListener {
      * and dead enemies are removed after spawning so the difficulty budget stays accurate.
      */
     private void tick() {
+        screenTick++;
+        if (gameState != 2) { panel.repaint(); return; }
+
         player.tickDash(mapGrid);
         if (!player.dashing) player.move(upHeld, leftHeld, downHeld, rightHeld, mapGrid);
 
@@ -155,10 +186,9 @@ public class Map implements KeyListener {
         player.checkProjectileHits(enemies);
         player.removeExpiredProjectiles();
 
+        if (!player.alive()) { panel.repaint(); return; }
         spawnEnemies();
         removeDeadEnemies();
-
-        if (!player.alive()) gameLoop.stop();
         panel.repaint();
     }
 
@@ -233,54 +263,26 @@ public class Map implements KeyListener {
     }
 
     // -------------------------------------------------------------------------
-    // Pause menu
+    // Pause
     // -------------------------------------------------------------------------
 
     /**
-     * Opens the pause menu in a small secondary window and stops the game loop.
-     * Does nothing if the game is already paused.
-     * The pause window captures keyboard input and listens for:
-     *   {@code P} — resume the game and close the window
-     *   {@code O} — quit the application
+     * Toggles the pause overlay. Only has effect during active gameplay
+     * (gameState == 2) and not on the start screen or game-over screen.
+     * The overlay is drawn by DrawPanel; no secondary window is used.
      */
-    private void openPauseMenu() {
-        if (paused) return;
-
-        paused = true;
-        gameLoop.stop();
-        upHeld = leftHeld = downHeld = rightHeld = false;
-
-        pauseWindow = new JFrame("Paused");
-        pauseWindow.setSize(300, 150);
-        pauseWindow.setLocationRelativeTo(window);
-        pauseWindow.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
-
-        JLabel hint = new JLabel(
-            "<html><center>P — Resume<br><br>O — Quit</center></html>",
-            SwingConstants.CENTER
-        );
-        pauseWindow.add(hint);
-
-        pauseWindow.addKeyListener(new KeyAdapter() {
-            @Override public void keyPressed(KeyEvent e) {
-                if (e.getKeyCode() == KeyEvent.VK_P) {
-                    paused = false;
-                    gameLoop.start();
-                    pauseWindow.dispose();
-                    window.requestFocus();
-                }
-                if (e.getKeyCode() == KeyEvent.VK_O) System.exit(0);
-            }
-        });
-
-        pauseWindow.addWindowListener(new WindowAdapter() {
-            @Override public void windowOpened(WindowEvent e) { pauseWindow.requestFocusInWindow(); }
-        });
-
-        pauseWindow.setFocusable(true);
-        pauseWindow.setVisible(true);
-        pauseWindow.toFront();
-        pauseWindow.requestFocusInWindow();
+    private void togglePause() {
+        if (gameState != 2) return;
+        if (!player.alive()) return;
+        paused = !paused;
+        if (paused) {
+            gameLoop.stop();
+            upHeld = leftHeld = downHeld = rightHeld = false;
+            panel.repaint();
+        } else {
+            gameLoop.start();
+            window.requestFocus();
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -294,8 +296,26 @@ public class Map implements KeyListener {
      */
     @Override
     public void keyPressed(KeyEvent e) {
+        // Handle start and rules screens first
+        if (gameState == 0) {
+            if (e.getKeyCode() == KeyEvent.VK_J) { startGame(); return; }
+            if (e.getKeyCode() == KeyEvent.VK_K) { gameState = 1; return; }
+        }
+        if (gameState == 1) {
+            if (e.getKeyCode() == KeyEvent.VK_K || e.getKeyCode() == KeyEvent.VK_J) {
+                gameState = 0; return;
+            }
+        }
+        // Game-over screen (player dead, still in gameState 2)
+        if (gameState == 2 && !player.alive()) {
+            if (e.getKeyCode() == KeyEvent.VK_J) { resetGame(); return; }        // play again
+            if (e.getKeyCode() == KeyEvent.VK_K) { gameState = 0; panel.repaint(); return; } // main menu
+            return; // block all other keys
+        }
+        if (gameState != 2) return;
         switch (e.getKeyCode()) {
-            case KeyEvent.VK_P: openPauseMenu();              break;
+            case KeyEvent.VK_P: togglePause();                break;
+            case KeyEvent.VK_O: if (paused) System.exit(0);  break;
             case KeyEvent.VK_W: upHeld    = true;             break;
             case KeyEvent.VK_A: leftHeld  = true;             break;
             case KeyEvent.VK_S: downHeld  = true;             break;
@@ -392,11 +412,14 @@ public class Map implements KeyListener {
             player.attackAnimations.setPlayerPosition(w / 2, h / 2);
 
             drawMap(g, tilesX, tilesY);
+            if (gameState == 0) { drawStartScreen(g2d, w, h); return; }
+            if (gameState == 1) { drawRulesScreen(g2d, w, h); return; }
             drawPlayer(g, g2d);
             drawProjectiles(g, g2d, tilesX, tilesY);
             drawEnemies(g, tilesX, tilesY);
             drawHUD(g2d, w, h);
             if (!player.alive()) drawGameOver(g2d, w, h);
+            if (paused)         drawPauseOverlay(g2d, w, h);
         }
 
         /**
@@ -597,35 +620,395 @@ public class Map implements KeyListener {
         }
 
         /**
-         * Draws a semi-transparent dark overlay and a centred "GAME OVER" message.
-         * Rendered on top of all other layers when the player's HP reaches zero.
-         * @param g2d the 2D graphics context to draw into
-         * @param w   panel width in pixels, used to centre the text
-         * @param h   panel height in pixels, used to centre the text
+         * Draws a styled game-over overlay consistent with the start and pause screens.
+         * Shows the final score and offers J — Play Again and K — Main Menu.
          */
         private void drawGameOver(Graphics2D g2d, int w, int h) {
-            g2d.setColor(new Color(0, 0, 0, 160));
+            int cx = w / 2, cy = h / 2;
+
+            // radial vignette over the frozen world
+            float[] fractions = {0f, 0.5f, 1f};
+            Color[] colors = {new Color(0,0,0,120), new Color(0,0,0,180), new Color(0,0,0,240)};
+            g2d.setPaint(new java.awt.RadialGradientPaint(cx, cy,
+                    Math.max(w, h) * 0.65f, fractions, colors));
             g2d.fillRect(0, 0, w, h);
 
-            String text = "GAME OVER";
-            g2d.setFont(new Font("SansSerif", Font.BOLD, 72));
+            // card
+            int cardW = 420, cardH = 360;
+            int cardX = cx - cardW / 2, cardY = cy - cardH / 2;
+
+            g2d.setColor(new Color(0, 0, 0, 120));
+            g2d.fillRoundRect(cardX + 8, cardY + 8, cardW, cardH, 20, 20);
+
+            GradientPaint cardBg = new GradientPaint(cardX, cardY, new Color(18, 5, 5),
+                    cardX, cardY + cardH, new Color(35, 8, 8));
+            g2d.setPaint(cardBg);
+            g2d.fillRoundRect(cardX, cardY, cardW, cardH, 20, 20);
+
+            // border — deep crimson
+            g2d.setColor(new Color(180, 40, 30, 210));
+            g2d.setStroke(new BasicStroke(1.8f));
+            g2d.drawRoundRect(cardX, cardY, cardW, cardH, 20, 20);
+            g2d.setColor(new Color(180, 40, 30, 55));
+            g2d.setStroke(new BasicStroke(1f));
+            g2d.drawRoundRect(cardX + 6, cardY + 6, cardW - 12, cardH - 12, 14, 14);
+
+            // gear accents (tinted red)
+            drawGear(g2d, cardX + 34,         cardY + 34, 22, 8, Math.PI / 5, new Color(180, 40, 30, 90));
+            drawGear(g2d, cardX + cardW - 34,  cardY + 34, 22, 8, 0,          new Color(180, 40, 30, 90));
+
+            // "GAME OVER" heading
+            g2d.setFont(new Font("SansSerif", Font.BOLD, 52));
+            FontMetrics fmH = g2d.getFontMetrics();
+            String heading = "GAME OVER";
+            int hx = cx - fmH.stringWidth(heading) / 2;
+            int hy = cardY + 72;
+
+            g2d.setColor(new Color(0, 0, 0, 180));
+            g2d.drawString(heading, hx + 3, hy + 3);
+            g2d.setColor(new Color(120, 20, 15, 110));
+            g2d.drawString(heading, hx + 2, hy + 2);
+            GradientPaint hGrad = new GradientPaint(0, hy - 44, new Color(255, 180, 160),
+                    0, hy, new Color(210, 40, 30));
+            g2d.setPaint(hGrad);
+            g2d.drawString(heading, hx, hy);
+
+            // divider
+            int divY = cardY + 90;
+            GradientPaint dl = new GradientPaint(cardX+20, divY, new Color(0,0,0,0), cx, divY, new Color(180,40,30,180));
+            GradientPaint dr = new GradientPaint(cx, divY, new Color(180,40,30,180), cardX+cardW-20, divY, new Color(0,0,0,0));
+            g2d.setStroke(new BasicStroke(1.2f));
+            g2d.setPaint(dl); g2d.drawLine(cardX+20, divY, cx, divY);
+            g2d.setPaint(dr); g2d.drawLine(cx, divY, cardX+cardW-20, divY);
+
+            // "FINAL SCORE" label
+            String scoreLabel = "FINAL SCORE";
+            g2d.setFont(new Font("Monospaced", Font.PLAIN, 12));
+            FontMetrics fmSL = g2d.getFontMetrics();
+            g2d.setColor(new Color(180, 100, 90, 180));
+            g2d.drawString(scoreLabel, cx - fmSL.stringWidth(scoreLabel) / 2, divY + 26);
+
+            // score value
+            g2d.setFont(new Font("SansSerif", Font.BOLD, 48));
+            FontMetrics fmScore = g2d.getFontMetrics();
+            String scoreVal = String.valueOf(score);
+            int scoreY = divY + 80;
+            g2d.setColor(new Color(0, 0, 0, 160));
+            g2d.drawString(scoreVal, cx - fmScore.stringWidth(scoreVal) / 2 + 2, scoreY + 2);
+            GradientPaint sGrad = new GradientPaint(0, scoreY - 40, new Color(255, 210, 180),
+                    0, scoreY, new Color(220, 100, 80));
+            g2d.setPaint(sGrad);
+            g2d.drawString(scoreVal, cx - fmScore.stringWidth(scoreVal) / 2, scoreY);
+
+            // action buttons
+            int btnY = scoreY + 30;
+            float pulse = (float)(0.75 + 0.25 * Math.sin(screenTick * 0.08));
+            drawMenuButton(g2d, cx - 170, btnY, "J", "PLAY AGAIN", pulse, new Color(220, 100, 30));
+            drawMenuButton(g2d, cx +  20, btnY, "K", "MENU",       1.0f,  new Color(130, 130, 130));
+
+            // flavour line
+            g2d.setFont(new Font("Monospaced", Font.PLAIN, 11));
+            g2d.setColor(new Color(140, 60, 50, 160));
+            String tip = "The factory claims another soul...";
+            FontMetrics fmT = g2d.getFontMetrics();
+            g2d.drawString(tip, cx - fmT.stringWidth(tip) / 2, cardY + cardH - 18);
+        }
+
+        /**
+         * Draws an in-game pause overlay. The world is still visible underneath
+         * through a dark vignette. A centred card shows the game title, score,
+         * and key hints for resuming or quitting.
+         */
+        private void drawPauseOverlay(Graphics2D g2d, int w, int h) {
+            // --- blurred vignette: dark radial gradient over the gameplay ---
+            int cx = w / 2, cy = h / 2;
+            float[] fractions = {0f, 0.55f, 1f};
+            Color[] colors = {
+                new Color(0, 0, 0, 100),
+                new Color(0, 0, 0, 160),
+                new Color(0, 0, 0, 230)
+            };
+            g2d.setPaint(new java.awt.RadialGradientPaint(cx, cy,
+                    Math.max(w, h) * 0.65f, fractions, colors));
+            g2d.fillRect(0, 0, w, h);
+
+            // --- card dimensions ---
+            int cardW = 380, cardH = 290;
+            int cardX = cx - cardW / 2;
+            int cardY = cy - cardH / 2;
+
+            // card shadow
+            g2d.setColor(new Color(0, 0, 0, 120));
+            g2d.fillRoundRect(cardX + 8, cardY + 8, cardW, cardH, 20, 20);
+
+            // card background
+            GradientPaint cardBg = new GradientPaint(cardX, cardY, new Color(18, 8, 4),
+                    cardX, cardY + cardH, new Color(30, 12, 6));
+            g2d.setPaint(cardBg);
+            g2d.fillRoundRect(cardX, cardY, cardW, cardH, 20, 20);
+
+            // card border — warm amber
+            g2d.setColor(new Color(200, 110, 50, 200));
+            g2d.setStroke(new BasicStroke(1.8f));
+            g2d.drawRoundRect(cardX, cardY, cardW, cardH, 20, 20);
+
+            // inner inset border
+            g2d.setColor(new Color(200, 110, 50, 60));
+            g2d.setStroke(new BasicStroke(1f));
+            g2d.drawRoundRect(cardX + 6, cardY + 6, cardW - 12, cardH - 12, 14, 14);
+
+            // gear accents (static while paused — screenTick is frozen)
+            drawGear(g2d, cardX + 34, cardY + 34, 22, 8, Math.PI / 6, new Color(200, 110, 50, 90));
+            drawGear(g2d, cardX + cardW - 34, cardY + 34, 22, 8, 0, new Color(200, 110, 50, 90));
+
+            // --- "PAUSED" heading ---
+            g2d.setFont(new Font("SansSerif", Font.BOLD, 42));
+            FontMetrics fmH = g2d.getFontMetrics();
+            String heading = "PAUSED";
+            int hx = cx - fmH.stringWidth(heading) / 2;
+            int hy = cardY + 66;
+            // shadow
+            g2d.setColor(new Color(0, 0, 0, 180));
+            g2d.drawString(heading, hx + 3, hy + 3);
+            // ember glow
+            g2d.setColor(new Color(160, 60, 20, 100));
+            g2d.drawString(heading, hx + 2, hy + 2);
+            // lit gradient
+            GradientPaint hGrad = new GradientPaint(0, hy - 38, new Color(255, 220, 160),
+                    0, hy, new Color(210, 90, 20));
+            g2d.setPaint(hGrad);
+            g2d.drawString(heading, hx, hy);
+
+            // divider
+            int divY = cardY + 82;
+            GradientPaint dl = new GradientPaint(cardX + 20, divY, new Color(0, 0, 0, 0),
+                    cx, divY, new Color(200, 110, 50, 180));
+            GradientPaint dr = new GradientPaint(cx, divY, new Color(200, 110, 50, 180),
+                    cardX + cardW - 20, divY, new Color(0, 0, 0, 0));
+            g2d.setStroke(new BasicStroke(1.2f));
+            g2d.setPaint(dl); g2d.drawLine(cardX + 20, divY, cx, divY);
+            g2d.setPaint(dr); g2d.drawLine(cx, divY, cardX + cardW - 20, divY);
+
+            // --- current score ---
+            g2d.setFont(new Font("Monospaced", Font.PLAIN, 13));
+            FontMetrics fmScore = g2d.getFontMetrics();
+            String scoreLabel = "S C O R E   " + score;
+            g2d.setColor(new Color(200, 160, 100, 200));
+            g2d.drawString(scoreLabel, cx - fmScore.stringWidth(scoreLabel) / 2, divY + 24);
+
+            // --- action buttons ---
+            int btnY = divY + 50;
+            drawMenuButton(g2d, cx - 160, btnY, "P", "RESUME", 1.0f, new Color(220, 100, 30));
+            drawMenuButton(g2d, cx + 10,  btnY, "O", "QUIT",   1.0f, new Color(140, 50,  40));
+
+            // --- tips row ---
+            g2d.setFont(new Font("Monospaced", Font.PLAIN, 11));
+            g2d.setColor(new Color(140, 100, 60, 160));
+            String tip = "Your factory awaits...";
+            FontMetrics fmT = g2d.getFontMetrics();
+            g2d.drawString(tip, cx - fmT.stringWidth(tip) / 2, cardY + cardH - 18);
+        }
+
+        /**
+         * Draws an atmospheric start screen with title, animated gear accents,
+         * and two button prompts: J to play, K to read rules.
+         */
+        private void drawStartScreen(Graphics2D g2d, int w, int h) {
+            // dark gradient overlay
+            GradientPaint bg = new GradientPaint(0, 0, new Color(10, 5, 2), 0, h, new Color(35, 15, 8));
+            g2d.setPaint(bg);
+            g2d.fillRect(0, 0, w, h);
+
+            // animated gear accents
+            drawGear(g2d, w / 4, h / 3, 90, 12, screenTick * 0.3, new Color(180, 90, 40, 80));
+            drawGear(g2d, 3 * w / 4, 2 * h / 3, 70, 10, -screenTick * 0.4, new Color(180, 90, 40, 60));
+            drawGear(g2d, w / 2 + 220, h / 2 - 140, 40, 8, screenTick * 0.7, new Color(200, 110, 50, 90));
+
+            // glowing horizontal rules
+            int lineY = h / 2 - 90;
+            g2d.setStroke(new BasicStroke(1.5f));
+            GradientPaint lg1 = new GradientPaint(w/2-260, lineY, new Color(0,0,0,0), w/2, lineY, new Color(200,110,50,200));
+            GradientPaint lg2 = new GradientPaint(w/2, lineY, new Color(200,110,50,200), w/2+260, lineY, new Color(0,0,0,0));
+            g2d.setPaint(lg1); g2d.drawLine(w/2-260, lineY, w/2, lineY);
+            g2d.setPaint(lg2); g2d.drawLine(w/2, lineY, w/2+260, lineY);
+
+            // subtitle
+            String subtitle = "A R C A D E   S U R V I V A L";
+            g2d.setFont(new Font("Monospaced", Font.PLAIN, 13));
+            FontMetrics fmSub = g2d.getFontMetrics();
+            g2d.setColor(new Color(200, 140, 80, 200));
+            g2d.drawString(subtitle, (w - fmSub.stringWidth(subtitle)) / 2, lineY - 10);
+
+            // main title
+            g2d.setFont(new Font("SansSerif", Font.BOLD, 86));
+            FontMetrics fmT = g2d.getFontMetrics();
+            String title = "FACTORY FLOOR";
+            String title2 = "FRENZY";
+            int t1x = (w - fmT.stringWidth(title))  / 2;
+            int t2x = (w - fmT.stringWidth(title2)) / 2;
+            int t1y = h / 2 - 10;
+            int t2y = h / 2 + 80;
+
+            // drop shadow
+            g2d.setColor(new Color(0, 0, 0, 180));
+            g2d.drawString(title,  t1x + 4, t1y + 4);
+            g2d.drawString(title2, t2x + 4, t2y + 4);
+            // ember glow
+            g2d.setColor(new Color(160, 60, 20, 120));
+            g2d.drawString(title,  t1x + 2, t1y + 2);
+            g2d.drawString(title2, t2x + 2, t2y + 2);
+            // lit gradient text
+            GradientPaint tGrad = new GradientPaint(0, t1y-80, new Color(255, 220, 160), 0, t2y, new Color(220, 100, 30));
+            g2d.setPaint(tGrad);
+            g2d.drawString(title,  t1x, t1y);
+            g2d.drawString(title2, t2x, t2y);
+
+            // pulsing button prompts
+            float pulse = (float)(0.75 + 0.25 * Math.sin(screenTick * 0.08));
+            int btnY = t2y + 80;
+            drawMenuButton(g2d, w/2 - 160, btnY, "J", "PLAY",  pulse, new Color(220, 100, 30));
+            drawMenuButton(g2d, w/2 +  20, btnY, "K", "RULES", 1.0f,  new Color(130, 130, 130));
+
+            // hint footer
+            g2d.setFont(new Font("Monospaced", Font.PLAIN, 11));
+            g2d.setColor(new Color(120, 80, 50, 150));
+            String credit = "WASD — move   ·   J — attack   ·   K — dash   ·   L — swap weapon";
+            FontMetrics fmC = g2d.getFontMetrics();
+            g2d.drawString(credit, (w - fmC.stringWidth(credit)) / 2, h - 24);
+        }
+
+        /** Draws a toothed gear centred at (cx, cy). */
+        private void drawGear(Graphics2D g2d, int cx, int cy, int r, int teeth,
+                               double angle, Color col) {
+            int inner = (int)(r * 0.72);
+            int hub   = (int)(r * 0.22);
+            int n = teeth * 2;
+            int[] xs = new int[n], ys = new int[n];
+            for (int i = 0; i < n; i++) {
+                double a = angle + i * Math.PI / teeth;
+                int rad = (i % 2 == 0) ? r : inner;
+                xs[i] = cx + (int)(rad * Math.cos(a));
+                ys[i] = cy + (int)(rad * Math.sin(a));
+            }
+            g2d.setColor(col);
+            g2d.setStroke(new BasicStroke(2.5f));
+            g2d.drawPolygon(xs, ys, n);
+            g2d.drawOval(cx - hub, cy - hub, hub * 2, hub * 2);
+        }
+
+        /** Draws a key badge + label button for the menu. */
+        private void drawMenuButton(Graphics2D g2d, int x, int y, String key, String label,
+                                    float pulse, Color accent) {
+            // measure label to auto-size button width
+            g2d.setFont(new Font("SansSerif", Font.BOLD, 14));
+            int labelW = g2d.getFontMetrics().stringWidth(label);
+            int bw = Math.max(130, 10 + 30 + 10 + labelW + 14); // badge + gap + label + padding
+            int bh = 46;
+            g2d.setColor(new Color(20, 10, 5, 200));
+            g2d.fillRoundRect(x, y, bw, bh, 12, 12);
+            g2d.setColor(new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), (int)(180 * pulse)));
+            g2d.setStroke(new BasicStroke(1.8f));
+            g2d.drawRoundRect(x, y, bw, bh, 12, 12);
+
+            // key badge
+            int kx = x + 10, ky = y + 8, ks = 30;
+            g2d.setColor(new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), (int)(220 * pulse)));
+            g2d.fillRoundRect(kx, ky, ks, ks, 6, 6);
+            g2d.setFont(new Font("SansSerif", Font.BOLD, 17));
             FontMetrics fm = g2d.getFontMetrics();
-            int tx = (w - fm.stringWidth(text)) / 2;
-            int ty = h / 2 - 20;
+            g2d.setColor(Color.BLACK);
+            g2d.drawString(key, kx + (ks - fm.stringWidth(key)) / 2, ky + 21);
 
-            g2d.setColor(new Color(180, 40, 40));
-            g2d.drawString(text, tx + 3, ty + 3); // drop shadow
-            g2d.setColor(Color.WHITE);
-            g2d.drawString(text, tx, ty);
-
-            String scoreText = "SCORE  " + score;
-            g2d.setFont(new Font("SansSerif", Font.BOLD, 32));
+            // label
+            g2d.setFont(new Font("SansSerif", Font.BOLD, 14));
             fm = g2d.getFontMetrics();
-            int sx = (w - fm.stringWidth(scoreText)) / 2;
-            g2d.setColor(new Color(180, 40, 40));
-            g2d.drawString(scoreText, sx + 2, ty + 52);
-            g2d.setColor(Color.WHITE);
-            g2d.drawString(scoreText, sx, ty + 50);
+            g2d.setColor(new Color(230, 200, 160, (int)(240 * pulse)));
+            g2d.drawString(label, kx + ks + 10, y + bh / 2 + 5);
+        }
+
+        /** Draws the rules / how-to-play screen. */
+        private void drawRulesScreen(Graphics2D g2d, int w, int h) {
+            GradientPaint bg = new GradientPaint(0, 0, new Color(10, 5, 2), 0, h, new Color(25, 10, 5));
+            g2d.setPaint(bg);
+            g2d.fillRect(0, 0, w, h);
+
+            drawGear(g2d, 60,     h/2, 55, 10,  screenTick * 0.2, new Color(180, 90, 40, 60));
+            drawGear(g2d, w - 60, h/2, 55, 10, -screenTick * 0.2, new Color(180, 90, 40, 60));
+
+            // heading
+            String heading = "HOW TO PLAY";
+            g2d.setFont(new Font("SansSerif", Font.BOLD, 46));
+            FontMetrics fmH = g2d.getFontMetrics();
+            int hx = (w - fmH.stringWidth(heading)) / 2;
+            int hy = h / 2 - 200;
+            g2d.setColor(new Color(0, 0, 0, 160));
+            g2d.drawString(heading, hx + 3, hy + 3);
+            GradientPaint hGrad = new GradientPaint(0, hy-40, new Color(255, 210, 140), 0, hy, new Color(210, 90, 20));
+            g2d.setPaint(hGrad);
+            g2d.drawString(heading, hx, hy);
+
+            g2d.setColor(new Color(200, 110, 50, 150));
+            g2d.setStroke(new BasicStroke(1.2f));
+            g2d.drawLine(w/2 - 220, hy + 14, w/2 + 220, hy + 14);
+
+            // controls table
+            String[][] controls = {
+                {"WASD", "Move your character"},
+                {"J",    "Attack  (hold to charge a heavy strike)"},
+                {"K",    "Dash  (short burst — invincible mid-dash)"},
+                {"L",    "Cycle weapon  (rapier → scythe → disc)"},
+                {"P",    "Pause / resume"},
+            };
+            int startY  = hy + 54;
+            int rowH    = 44;
+            int colKey  = w / 2 - 240;
+            int colDesc = w / 2 - 90;
+
+            g2d.setFont(new Font("SansSerif", Font.PLAIN, 12));
+            g2d.setColor(new Color(160, 110, 70, 160));
+            g2d.drawString("KEY", colKey, startY - 8);
+            g2d.drawString("ACTION", colDesc, startY - 8);
+
+            for (int i = 0; i < controls.length; i++) {
+                int ry = startY + i * rowH;
+                if (i % 2 == 0) {
+                    g2d.setColor(new Color(255, 150, 50, 15));
+                    g2d.fillRoundRect(colKey - 10, ry - 20, 490, rowH - 4, 8, 8);
+                }
+                // key badge
+                String k = controls[i][0];
+                g2d.setFont(new Font("SansSerif", Font.BOLD, 13));
+                int bw2 = g2d.getFontMetrics().stringWidth(k) + 18;
+                g2d.setColor(new Color(200, 90, 30, 220));
+                g2d.fillRoundRect(colKey - 4, ry - 17, bw2, 24, 6, 6);
+                g2d.setColor(Color.BLACK);
+                g2d.drawString(k, colKey + 5, ry - 1);
+                // description
+                g2d.setFont(new Font("SansSerif", Font.PLAIN, 15));
+                g2d.setColor(new Color(230, 200, 160));
+                g2d.drawString(controls[i][1], colDesc, ry - 1);
+            }
+
+            // tips
+            int tipY = startY + controls.length * rowH + 20;
+            g2d.setColor(new Color(200, 110, 50, 120));
+            g2d.setStroke(new BasicStroke(1f));
+            g2d.drawLine(w/2 - 220, tipY, w/2 + 220, tipY);
+            String[] tips = {
+                "Survive as long as possible — enemies spawn in relentless waves.",
+                "Kill enemies to earn points. Charge J for a devastating heavy attack.",
+                "Dash through danger — you're invincible during the whole burst.",
+            };
+            g2d.setFont(new Font("SansSerif", Font.ITALIC, 13));
+            g2d.setColor(new Color(180, 140, 90, 180));
+            for (int i = 0; i < tips.length; i++) {
+                FontMetrics fmT = g2d.getFontMetrics();
+                g2d.drawString("· " + tips[i], (w - fmT.stringWidth("· " + tips[i])) / 2, tipY + 22 + i * 22);
+            }
+
+            // back button
+            float pulse = (float)(0.8 + 0.2 * Math.sin(screenTick * 0.08));
+            drawMenuButton(g2d, w/2 - 65, tipY + 90, "K", "BACK", pulse, new Color(130, 130, 130));
         }
     }
 }
