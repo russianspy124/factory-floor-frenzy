@@ -1,6 +1,7 @@
 class Player extends Damageable {
     double x, y;
     double kbX = 0, kbY = 0;
+    int maxHp=100;
     
 
     Hitbox hitbox = new Hitbox(0, 0, 100, 100);

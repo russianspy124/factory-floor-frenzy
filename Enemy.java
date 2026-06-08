@@ -6,21 +6,27 @@ class Enemy extends Damageable {
 
     double kbX = 0, kbY = 0;
 
-    double MOVESPEED = 0.075;
+    double movespeed = 0.075;
 
     double dist;
 
     double damage = 10;
 
+    int type;
+
     Hitbox hitbox = new Hitbox(x, y, 100, 100);
 
-    Enemy(int hp, double x, double y) {
+    Enemy(int type,int hp, double movespeed, double x, double y) {
 
         super(hp);
 
         this.x = x;
 
         this.y = y;
+        
+        this.movespeed=movespeed;
+        
+        this.type = type;
     }
 
     void move(double playerX, double playerY, ArrayList<Enemy> enemies) {
@@ -32,8 +38,8 @@ class Enemy extends Damageable {
         this.dist = Math.sqrt(distSq);
 
         if (this.dist > 0) {
-            this.x += ((playerX - this.x) / this.dist * MOVESPEED);
-            this.y += ((playerY - this.y) / this.dist * MOVESPEED);
+            this.x += ((playerX - this.x) / this.dist * movespeed);
+            this.y += ((playerY - this.y) / this.dist * movespeed);
         }
 
         // Prevent enemies from overlapping

@@ -15,11 +15,13 @@ public class Map implements KeyListener {
     Timer timer;
     int mapWidth = 15, mapHeight = 9, tileSize = 100, tilesX, tilesY, attackCooldown, attackHoldCounter = 0;
     int weaponchoice = 0; //0 - rapier, 1 - scythe, 2 - disc
-    int difficultyValue=0,roomDifficulty=50, iFrames=0;
+    int playerDirection =0; //0 down, 1 right, 2 up, 3 left
+    int difficultyValue=0,stageDifficulty=50, stageCount=0, difficultyMax=30; //all used in wave spawning
+    int iFrames=0;
     int[][] mapArray = new int[mapHeight][mapWidth];
     double playerX = 4, playerY = 4;
     boolean WPressed = false, APressed = false, SPressed = false, DPressed = false, attackHeld;
-    BufferedImage playerSprite = loadImage("playerOne.png");
+    BufferedImage playerSprite = loadImage("playerSprite.png");
     ArrayList<Enemy> enemies = new ArrayList<Enemy>();
     ArrayList<Projectile> projectiles = new ArrayList<Projectile>();
     Player player = new Player(100);
@@ -115,16 +117,31 @@ public class Map implements KeyListener {
     DPressed = false;
 
     pauseWindow = new JFrame("Paused");
-    pauseWindow.setSize(300, 150);
+    pauseWindow.setSize(300, 220);
     pauseWindow.setLocationRelativeTo(window);
     pauseWindow.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+    
+    JPanel pausePanel = new JPanel();
 
-    JLabel label = new JLabel(
-        "<html><center>P - Resume Game<br><br>O - Exit Game</center></html>",
+    JLabel label1 = new JLabel(
+        "                                  Resume Game - P ",
         SwingConstants.CENTER
     );
 
-    pauseWindow.add(label);
+    JLabel label2 = new JLabel(
+        "                                  Exit Game - O",
+        SwingConstants.CENTER
+    );
+    pausePanel.setLayout(new BoxLayout(pausePanel,BoxLayout.Y_AXIS));
+    pausePanel.add(new JLabel(" "));
+    pausePanel.add(new JLabel(" "));
+    pausePanel.add(new JLabel(" "));
+
+
+    pausePanel.add(new JLabel("                                  Score:   " + (String.valueOf(difficultyValue-30))));
+    pausePanel.add(label1);
+    pausePanel.add(label2);
+    pauseWindow.add(pausePanel);
 
     pauseWindow.addKeyListener(new KeyAdapter() {
         @Override
@@ -173,27 +190,31 @@ public class Map implements KeyListener {
         openPauseMenu();
         return;
         }
-        
+        //0 down, 1 right, 2 up, 3 left
         if (k == KeyEvent.VK_W) {
             WPressed = true;
+            playerDirection=2;
         }
         if (k == KeyEvent.VK_A) {
             APressed = true;
+            playerDirection=3;
 
         }
 
         if (k == KeyEvent.VK_S) {
             SPressed = true;
+            playerDirection=0;
 
         }
 
         if (k == KeyEvent.VK_D) {
             DPressed = true;
+            playerDirection=1;
         }
         //Spawns Enemies for testing
         if (k == KeyEvent.VK_8) {
             for (int i = 0; i < 1; i++) {
-                enemies.add(new Enemy(10, Math.random() * mapWidth, Math.random() * mapHeight));
+                enemies.add(new Enemy(0,10, 0.075, Math.random() * mapWidth, Math.random() * mapHeight));
             }
         }
         if (k == KeyEvent.VK_J) {
@@ -304,12 +325,28 @@ public class Map implements KeyListener {
     }
     void spawnEnemies(){
         if (difficultyValue<15){//once there are fewer than a certain amount of enemies in a room, will spawn next wave
-            while(difficultyValue<30&&roomDifficulty>0){//spawns wave until room runs out of enemies to spawn or max difficulty is reached
-                //TODO: refactor when new enemy types are coded
-                enemies.add(new Enemy(10, Math.random() * mapWidth, Math.random() * mapHeight));
-                System.out.println("Enemy spawned");
-                difficultyValue+=3;
-                roomDifficulty-=3;
+            while(difficultyValue<difficultyMax&&stageDifficulty>0){//spawns wave until room runs out of enemies to spawn or max difficulty is reached
+                switch ((int)Math.random()*5){
+                    case 1:
+                        enemies.add(new Enemy(1,25, 0.04, Math.random() * mapWidth, Math.random() * mapHeight));
+                        System.out.println("Tank spawned");
+                        difficultyValue+=5;
+                        stageDifficulty-=5;
+                        break;
+                    default:
+                     enemies.add(new Enemy(0,10, 0.075, Math.random() * mapWidth, Math.random() * mapHeight));
+                     System.out.println("Enemy spawned");
+                     difficultyValue+=3;
+                     stageDifficulty-=3;
+
+                }
+                
+                
+            } if (difficultyValue<3){
+                stageDifficulty++; //increases number of enemies that will spawn in following stage
+                stageDifficulty=(int)50*(stageCount+2/2);
+                difficultyMax+=10; //increases enemies that can spawn in a wave
+
             }
         }
     }
@@ -450,7 +487,8 @@ public class Map implements KeyListener {
                     g.setColor(heavy);
                     g.fillOval(this.getWidth() / 2, this.getHeight() / 2, 100, 100);
                 }
-                g.drawImage(playerSprite, this.getWidth() / 2 - 50, this.getHeight() / 2 - 50, 100, 100, null);
+                g.drawImage(playerSprite, this.getWidth() / 2, this.getHeight() / 2,this.getWidth()/2+80,this.getHeight() / 2 + 105,playerDirection*80,0 ,playerDirection*80+80, 105,  null);
+                
                 g.setColor(Color.red);
                 for (Projectile projectile : projectiles) {
                     Polygon p = new Polygon();
@@ -464,6 +502,16 @@ public class Map implements KeyListener {
                 for (Enemy enemy : enemies) {
                     g.fillOval((int) ((enemy.x - playerX + tilesX / 2) * tileSize), (int) ((enemy.y - playerY + (tilesY / 2)) * tileSize), 50, 50);
                 }
+                g.setColor(Color.lightGray);
+                g.fillRect(10,panH-200,200, 200);
+                g.setColor(Color.gray);
+                g.fillRect(20, panH-160, 150, 150);
+
+                g.setColor(Color.green);
+                g.fillRect(20,panH-190,(int)((player.hp/player.maxHp*150)),20);
+                
+
+
 
 
                 this.setPreferredSize(new Dimension(panW, panH));
