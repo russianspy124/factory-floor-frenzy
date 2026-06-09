@@ -408,6 +408,15 @@ public class Map implements KeyListener {
         /** Tile colour for wall tiles (tile value 2). */
         private static final Color WALL_COLOR  = new Color(199, 93,  72);
 
+        //Wall top sprite
+        BufferedImage wallTop = loadImage("wallTop.png");
+
+        //wall side sprite
+        BufferedImage wallSide = loadImage("wallSide.png");
+        
+        //Floor Texture
+        BufferedImage floorTile = loadImage("floorTile.png");
+
         /** Colour of the charging glow shown when a heavy attack is being charged. */
         private static final Color HEAVY_COLOR = new Color(255, 255, 255, 100);
 
@@ -470,9 +479,11 @@ public class Map implements KeyListener {
                     int screenY = (int) ((row - player.y % 1) * TILE_SIZE);
 
                     switch (mapGrid[mapRow][mapCol]) {
-                        case 1: g.setColor(FLOOR_COLOR); g.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE); break;
-                        case 2: g.setColor(WALL_COLOR);  g.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE); break;
+                        case 1: g.drawImage(floorTile,screenX, screenY, TILE_SIZE, TILE_SIZE, null); break;
+                        case 2: g.drawImage(wallSide,screenX, screenY, TILE_SIZE, TILE_SIZE, null); break;
+                        case 3: g.drawImage(wallTop,screenX, screenY, TILE_SIZE, TILE_SIZE, null); break;
                         
+
                     }
                 }
             }
