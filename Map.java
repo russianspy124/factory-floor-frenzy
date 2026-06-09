@@ -85,14 +85,11 @@ public class Map implements KeyListener {
     /** All enemies currently alive in the world. */
     ArrayList<Enemy> enemies = new ArrayList<>();
 
-    /** The player sprite sheet, loaded once at startup. */
+    /** The player sprite, loaded once at startup. */
     BufferedImage playerSprite = loadImage("playerSprite.png");
 
-    /**
-     * Current facing direction for sprite-sheet selection.
-     *   0 = down, 1 = right, 2 = up, 3 = left
-     */
-    int playerDirection = 0;
+    //Used to determine where in the player sprite sheet to render. 0 down, 1 right, 2 up, 3 left
+    int playerDirection=0;
 
     // --- Input state ---
 
@@ -279,6 +276,7 @@ public class Map implements KeyListener {
         }
     }
 
+
     /**
      * Removes all enemies whose HP has reached zero or below, refunding their
      * difficulty cost to activeDifficulty so new enemies can spawn.
@@ -381,6 +379,7 @@ public class Map implements KeyListener {
             if (e.getKeyCode() == KeyEvent.VK_K) { gameState = 0; panel.repaint(); return; } // main menu
             return; // block all other keys
         }
+        //0 down, 1 right, 2 up, 3 left
         if (gameState != 2) return;
         switch (e.getKeyCode()) {
             case KeyEvent.VK_P: togglePause();                break;
@@ -453,6 +452,15 @@ public class Map implements KeyListener {
 
         /** Fallback tile colour for wall tiles (tile value 2) if sprite is missing. */
         private static final Color WALL_COLOR  = new Color(199, 93,  72);
+
+        //Wall top sprite
+        BufferedImage wallTop = loadImage("wallTop.png");
+
+        //wall side sprite
+        BufferedImage wallSide = loadImage("wallSide.png");
+        
+        //Floor Texture
+        BufferedImage floorTile = loadImage("floorTile.png");
 
         /** Colour of the charging glow shown when a heavy attack is being charged. */
         private static final Color HEAVY_COLOR = new Color(255, 255, 255, 100);
