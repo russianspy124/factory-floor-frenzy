@@ -465,15 +465,6 @@ public class Map implements KeyListener {
         /** Colour of the charging glow shown when a heavy attack is being charged. */
         private static final Color HEAVY_COLOR = new Color(255, 255, 255, 100);
 
-        /** Floor tile sprite. */
-        BufferedImage floorTile = loadImage("floorTile.png");
-
-        /** Wall side sprite (tile value 2). */
-        BufferedImage wallSide = loadImage("wallSide.png");
-
-        /** Wall top sprite (tile value 3). */
-        BufferedImage wallTop = loadImage("wallTop.png");
-
         /**
          * Creates the draw panel with a sensible default size.
          * The window is immediately maximised, so this size is only briefly visible.
