@@ -5,28 +5,38 @@
  */
 class EnemyProjectile {
 
-    /** Current world-space position. */
+    /**
+     * Current world-space position.
+     */
     double x, y;
 
-    /** Velocity in world units per tick. */
+    /**
+     * Velocity in world units per tick.
+     */
     double vx, vy;
 
-    /** Ticks remaining before this projectile is removed. */
+    /**
+     * Ticks remaining before this projectile is removed.
+     */
     int lifespan = 200;
 
     EnemyProjectile(double x, double y, double vx, double vy) {
-        this.x  = x;
-        this.y  = y;
+        this.x = x;
+        this.y = y;
         this.vx = vx;
         this.vy = vy;
     }
 
-    /** Advances this projectile by one tick. */
+    /**
+     * Advances this projectile by one tick.
+     */
     void move() {
         x += vx;
         y += vy;
         lifespan--;
     }
 
-    boolean expired() { return lifespan <= 0; }
+    boolean expired() {
+        return lifespan <= 0;
+    }
 }

@@ -8,29 +8,35 @@ import java.awt.*;
  */
 class Hitbox {
 
-    /** World-space X position of the top-left corner. */
+    /**
+     * World-space X position of the top-left corner.
+     */
     double x, y;
 
-    /** Width and height of the hitbox in world-space units. */
+    /**
+     * Width and height of the hitbox in world-space units.
+     */
     int width, height;
 
     /**
      * Creates a hitbox at the given position with the given dimensions.
+     *
      * @param x      initial X position (top-left corner)
      * @param y      initial Y position (top-left corner)
      * @param width  width in world-space units
      * @param height height in world-space units
      */
     Hitbox(double x, double y, int width, int height) {
-        this.x      = x;
-        this.y      = y;
-        this.width  = width;
+        this.x = x;
+        this.y = y;
+        this.width = width;
         this.height = height;
     }
 
     /**
      * Moves the hitbox to a new top-left position, typically called each tick
      * to keep it in sync with the owning entity's world position.
+     *
      * @param x new X position
      * @param y new Y position
      */
@@ -41,6 +47,7 @@ class Hitbox {
 
     /**
      * Tests whether this hitbox overlaps with another.
+     *
      * @param other the hitbox to test against
      * @return {@code true} if the two rectangles intersect
      */
@@ -51,6 +58,7 @@ class Hitbox {
     /**
      * Converts this hitbox to an AWT Rectangle for use with
      * standard intersection methods.
+     *
      * @return a Rectangle representing this hitbox
      */
     private Rectangle toRect() {

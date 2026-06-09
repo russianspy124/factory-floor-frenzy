@@ -3,33 +3,45 @@ import java.util.ArrayList;
 /**
  * A ranged enemy that approaches the player until within firing range, then
  * stops and periodically fires projectiles toward the player.
- *
+ * <p>
  * Behaviour:
- *   - Walk toward the player while distToPlayer > FIRE_RANGE.
- *   - Stand still and shoot once per FIRE_COOLDOWN ticks while in range.
- *   - Gently separates from overlapping enemies to prevent clumping.
- *
+ * - Walk toward the player while distToPlayer > FIRE_RANGE.
+ * - Stand still and shoot once per FIRE_COOLDOWN ticks while in range.
+ * - Gently separates from overlapping enemies to prevent clumping.
+ * <p>
  * Projectiles fired by this enemy are stored in {@link #projectiles} and
  * managed (moved, drawn, collision-checked) by Map each tick.
  */
 class RangedEnemy extends Enemy {
 
-    /** World units at which this enemy stops walking and starts shooting. */
+    /**
+     * World units at which this enemy stops walking and starts shooting.
+     */
     static final double FIRE_RANGE = 5.0;
 
-    /** Ticks between shots. */
+    /**
+     * Ticks between shots.
+     */
     private static final int FIRE_COOLDOWN = 120;
 
-    /** Speed of fired projectiles in world units per tick. */
+    /**
+     * Speed of fired projectiles in world units per tick.
+     */
     private static final double PROJECTILE_SPEED = 0.12;
 
-    /** Damage each projectile deals to the player. */
+    /**
+     * Damage each projectile deals to the player.
+     */
     static final double PROJECTILE_DAMAGE = 8;
 
-    /** Ticks until this enemy may fire again. */
+    /**
+     * Ticks until this enemy may fire again.
+     */
     int fireCooldown = 60; // initial offset so it doesn't fire immediately on spawn
 
-    /** Live projectiles this enemy has fired; managed externally by Map. */
+    /**
+     * Live projectiles this enemy has fired; managed externally by Map.
+     */
     ArrayList<EnemyProjectile> projectiles = new ArrayList<>();
 
     RangedEnemy(int hp, double x, double y) {
@@ -67,14 +79,14 @@ class RangedEnemy extends Enemy {
     }
 
     private void fireAt(double targetX, double targetY) {
-        double dx   = targetX - x;
-        double dy   = targetY - y;
+        double dx = targetX - x;
+        double dy = targetY - y;
         double dist = Math.sqrt(dx * dx + dy * dy);
         if (dist == 0) return;
         projectiles.add(new EnemyProjectile(
-            x, y,
-            (dx / dist) * PROJECTILE_SPEED,
-            (dy / dist) * PROJECTILE_SPEED
+                x, y,
+                (dx / dist) * PROJECTILE_SPEED,
+                (dy / dist) * PROJECTILE_SPEED
         ));
     }
 
@@ -85,8 +97,8 @@ class RangedEnemy extends Enemy {
     private void separateFromEnemies(ArrayList<Enemy> allEnemies) {
         for (Enemy other : allEnemies) {
             if (other == this) continue;
-            double dx   = x - other.x;
-            double dy   = y - other.y;
+            double dx = x - other.x;
+            double dy = y - other.y;
             double dist = Math.sqrt(dx * dx + dy * dy);
             if (dist > 0 && dist < MIN_SPACING) {
                 double overlap = MIN_SPACING - dist;

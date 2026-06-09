@@ -113,16 +113,21 @@ class AttackAnimations {
      * @param enemyScreenX screen-space X for each enemy (parallel to {@code enemies})
      * @param enemyScreenY screen-space Y for each enemy (parallel to {@code enemies})
      * @param damage       HP to subtract from each enemy that is struck
+     * @param facingAngle  the direction the player is facing, used to locate the grip pivot
      */
-    void checkSwingHits(ArrayList<Enemy> enemies, int[] enemyScreenX, int[] enemyScreenY, int damage) {
+    void checkSwingHits(ArrayList<Enemy> enemies, int[] enemyScreenX, int[] enemyScreenY, int damage, double facingAngle) {
         if (!swinging) return;
+
+        // Use the grip point as the pivot to match drawSwing's visual origin
+        int gripX = playerX + (int) (Math.cos(facingAngle) * HAND_OFFSET);
+        int gripY = playerY + (int) (Math.sin(facingAngle) * HAND_OFFSET);
 
         for (int i = 0; i < enemies.size(); i++) {
             Enemy enemy = enemies.get(i);
             if (alreadyHitThisSwing.contains(enemy)) continue;
 
-            int    dx   = enemyScreenX[i] - playerX;
-            int    dy   = enemyScreenY[i] - playerY;
+            int    dx   = enemyScreenX[i] - gripX;
+            int    dy   = enemyScreenY[i] - gripY;
             double dist = Math.sqrt(dx * dx + dy * dy);
             if (dist > SWING_HIT_RADIUS) continue;
 

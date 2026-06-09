@@ -314,7 +314,7 @@ class Player extends Damageable {
                 screenX[i] = (int) ((e.x - x + tilesX / 2.0) * tileSize);
                 screenY[i] = (int) ((e.y - y + tilesY / 2.0) * tileSize);
             }
-            attackAnimations.checkSwingHits(enemies, screenX, screenY, 15);
+            attackAnimations.checkSwingHits(enemies, screenX, screenY, 15, facingAngle);
         }
     }
 
