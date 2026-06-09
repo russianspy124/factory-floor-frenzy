@@ -17,13 +17,13 @@ class Enemy extends Damageable {
     double distToPlayer;
 
     /** Movement speed in world units per tick. */
-    private static final double MOVE_SPEED = 0.075;
+    static final double MOVE_SPEED = 0.075;
 
     /**
      * Minimum distance between two enemies in world units.
      * Enemies push apart when closer than this to avoid stacking.
      */
-    private static final double MIN_SPACING = 0.5;
+    static final double MIN_SPACING = 0.5;
 
     /**
      * Distance to the player, in world units, at which contact damage is applied.

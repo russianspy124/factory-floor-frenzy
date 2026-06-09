@@ -23,15 +23,15 @@ public class Map implements KeyListener {
     // --- Map layout ---
 
     /** Number of tiles in the map along the X axis. */
-    static final int MAP_WIDTH  = 15;
+    static final int MAP_WIDTH  = 137;
 
     /** Number of tiles in the map along the Y axis. */
-    static final int MAP_HEIGHT = 9;
+    static final int MAP_HEIGHT = 20;
 
     /** Pixel size of one world tile. Controls zoom level for the entire game. */
     static final int TILE_SIZE  = 100;
 
-    /** The loaded tile grid. Values: 0 = void, 1 = floor, 2 = wall. */
+    /** The loaded tile grid. Values: 0 = void, 1 = floor, 2 = wall, 3 = wallTop. */
     int[][] mapGrid = new int[MAP_HEIGHT][MAP_WIDTH];
 
     // --- Difficulty / spawning ---
@@ -48,11 +48,14 @@ public class Map implements KeyListener {
     /** Spawn a new wave when activeDifficulty drops below this value. */
     static final int SPAWN_THRESHOLD = 15;
 
-    //increments after the player has killed a certain number of enemies, causes larger waves to spawn
-    int stageCount=0;
+    /**
+     * Maximum allowed value of activeDifficulty at any one time.
+     * Grows by 10 each time a wave is fully cleared (stageCount increments).
+     */
+    int maxDifficulty = 30;
 
-    /** Maximum allowed value of activeDifficulty at any one time. */
-    int maxDifficulty  = 30;
+    /** Increments each time a wave is fully cleared; drives wave escalation. */
+    int stageCount = 0;
 
     /** Difficulty points each enemy costs when spawned (and refunds when killed). */
     static final int ENEMY_COST      = 3;
@@ -124,7 +127,7 @@ public class Map implements KeyListener {
      * and starts the game loop.
      */
     Map() {
-        loadMap("sampleMap.txt");
+        loadMap("Gamemap");
 
         player.x = 4;
         player.y = 4;
@@ -155,15 +158,17 @@ public class Map implements KeyListener {
 
     /** Resets all game state so a fresh run can begin. */
     private void resetGame() {
-        score             = 0;
-        activeDifficulty  = 0;
+        score               = 0;
+        activeDifficulty    = 0;
         remainingDifficulty = 50;
+        maxDifficulty       = 30;
+        stageCount          = 0;
         enemies.clear();
-        player            = new Player(100);
-        player.x          = 4;
-        player.y          = 4;
+        player              = new Player(100);
+        player.x            = 4;
+        player.y            = 4;
         upHeld = leftHeld = downHeld = rightHeld = false;
-        paused            = false;
+        paused              = false;
         gameLoop.start();
     }
 
@@ -181,6 +186,36 @@ public class Map implements KeyListener {
         if (!player.dashing) player.move(upHeld, leftHeld, downHeld, rightHeld, mapGrid);
 
         for (Enemy enemy : enemies) enemy.move(player.x, player.y, enemies);
+
+        // Move and expire enemy projectiles; check hits on player
+        for (int i = enemies.size() - 1; i >= 0; i--) {
+            Enemy e = enemies.get(i);
+            if (!(e instanceof RangedEnemy)) continue;
+            RangedEnemy re = (RangedEnemy) e;
+            for (int j = re.projectiles.size() - 1; j >= 0; j--) {
+                EnemyProjectile p = re.projectiles.get(j);
+                p.move();
+                if (p.expired()) { re.projectiles.remove(j); continue; }
+                double dx = p.x - player.x;
+                double dy = p.y - player.y;
+                if (Math.sqrt(dx*dx + dy*dy) < 0.4 && player.iFrames <= 0) {
+                    player.iFrames += 50;
+                    player.takeDamage((int) RangedEnemy.PROJECTILE_DAMAGE);
+                    re.projectiles.remove(j);
+                }
+            }
+        }
+
+        // Charger dash contact damage
+        for (Enemy e : enemies) {
+            if (e instanceof ChargerEnemy) {
+                ChargerEnemy ce = (ChargerEnemy) e;
+                if (ce.isDashing() && ce.distToPlayer < 0.5 && player.iFrames <= 0) {
+                    player.iFrames += 60;
+                    player.takeDamage((int) ChargerEnemy.DASH_DAMAGE);
+                }
+            }
+        }
 
         player.checkEnemyCollision(enemies);
 
@@ -207,30 +242,36 @@ public class Map implements KeyListener {
      * spending from remainingDifficulty until the cap or budget is reached.
      * Each spawned enemy increases activeDifficulty by ENEMY_COST.
      */
-
-       void spawnEnemies(){
-        if (activeDifficulty<15){//once there are fewer than a certain amount of enemies in a room, will spawn next wave
-            while(activeDifficulty<maxDifficulty&&remainingDifficulty>0){//spawns wave until room runs out of enemies to spawn or max difficulty is reached
-                switch ((int)Math.random()*5){
+    private void spawnEnemies() {
+        if (activeDifficulty < SPAWN_THRESHOLD) {
+            while (activeDifficulty < maxDifficulty && remainingDifficulty > 0) {
+                double spawnX = Math.random() * MAP_WIDTH;
+                double spawnY = Math.random() * MAP_HEIGHT;
+                // roll 0-4: 0=tank (rare), 1=ranged, 2=charger, 3-4=basic melee
+                int roll = (int)(Math.random() * 5);
+                switch (roll) {
+                    case 0:
+                        enemies.add(new TankEnemy(25, spawnX, spawnY));
+                        break;
                     case 1:
-                        enemies.add(new Enemy(25, Math.random() * MAP_WIDTH, Math.random() * MAP_HEIGHT));
-                        System.out.println("Tank spawned");
-                        activeDifficulty+=ENEMY_COST;
-                        remainingDifficulty-=ENEMY_COST;
+                        enemies.add(new RangedEnemy(12, spawnX, spawnY));
+                        break;
+                    case 2:
+                        enemies.add(new ChargerEnemy(15, spawnX, spawnY));
                         break;
                     default:
-                     enemies.add(new Enemy(10, Math.random() * MAP_WIDTH, Math.random() * MAP_HEIGHT));
-                     System.out.println("Enemy spawned");
-                     activeDifficulty+=ENEMY_COST;
-                     remainingDifficulty-=ENEMY_COST;
+                        enemies.add(new Enemy(10, spawnX, spawnY));
+                        break;
                 }
-                
-                
-            } if (activeDifficulty<3){
-                stageCount++; //increases number of enemies that will spawn in following stage
-                remainingDifficulty=(int)50*(stageCount+2/2);
-                maxDifficulty+=10; //increases enemies that can spawn in a wave
+                activeDifficulty    += ENEMY_COST;
+                remainingDifficulty -= ENEMY_COST;
+            }
 
+            // Wave fully cleared — escalate
+            if (activeDifficulty < 3) {
+                stageCount++;
+                remainingDifficulty = (int) 50 * (stageCount + 2 / 2);
+                maxDifficulty      += 10;
             }
         }
     }
@@ -343,10 +384,10 @@ public class Map implements KeyListener {
         switch (e.getKeyCode()) {
             case KeyEvent.VK_P: togglePause();                break;
             case KeyEvent.VK_O: if (paused) System.exit(0);  break;
-            case KeyEvent.VK_W: upHeld    = true; playerDirection=2;             break;
-            case KeyEvent.VK_A: leftHeld  = true; playerDirection=3;            break;
-            case KeyEvent.VK_S: downHeld  = true; playerDirection=0;            break;
-            case KeyEvent.VK_D: rightHeld = true; playerDirection=1;            break;
+            case KeyEvent.VK_W: upHeld    = true; playerDirection = 2; break;
+            case KeyEvent.VK_A: leftHeld  = true; playerDirection = 3; break;
+            case KeyEvent.VK_S: downHeld  = true; playerDirection = 0; break;
+            case KeyEvent.VK_D: rightHeld = true; playerDirection = 1; break;
             case KeyEvent.VK_J:
                 if (player.attackCooldown <= 0) player.attackHeld = true;
                 break;
@@ -355,7 +396,11 @@ public class Map implements KeyListener {
                 player.weaponChoice = (player.weaponChoice + 1) % 3;
                 break;
             case KeyEvent.VK_8:
-                enemies.add(new Enemy(10, Math.random() * MAP_WIDTH, Math.random() * MAP_HEIGHT));
+                int r = (int)(Math.random() * 5);
+                if      (r == 0) enemies.add(new TankEnemy(25,    Math.random() * MAP_WIDTH, Math.random() * MAP_HEIGHT));
+                else if (r == 1) enemies.add(new RangedEnemy(12,  Math.random() * MAP_WIDTH, Math.random() * MAP_HEIGHT));
+                else if (r == 2) enemies.add(new ChargerEnemy(15, Math.random() * MAP_WIDTH, Math.random() * MAP_HEIGHT));
+                else             enemies.add(new Enemy(10,        Math.random() * MAP_WIDTH, Math.random() * MAP_HEIGHT));
                 break;
         }
     }
@@ -402,10 +447,10 @@ public class Map implements KeyListener {
      */
     class DrawPanel extends JPanel {
 
-        /** Tile colour for floor tiles (tile value 1). */
+        /** Fallback tile colour for floor tiles (tile value 1) if sprite is missing. */
         private static final Color FLOOR_COLOR = new Color(138, 65,  51);
 
-        /** Tile colour for wall tiles (tile value 2). */
+        /** Fallback tile colour for wall tiles (tile value 2) if sprite is missing. */
         private static final Color WALL_COLOR  = new Color(199, 93,  72);
 
         //Wall top sprite
@@ -419,6 +464,15 @@ public class Map implements KeyListener {
 
         /** Colour of the charging glow shown when a heavy attack is being charged. */
         private static final Color HEAVY_COLOR = new Color(255, 255, 255, 100);
+
+        /** Floor tile sprite. */
+        BufferedImage floorTile = loadImage("floorTile.png");
+
+        /** Wall side sprite (tile value 2). */
+        BufferedImage wallSide = loadImage("wallSide.png");
+
+        /** Wall top sprite (tile value 3). */
+        BufferedImage wallTop = loadImage("wallTop.png");
 
         /**
          * Creates the draw panel with a sensible default size.
@@ -452,7 +506,7 @@ public class Map implements KeyListener {
             if (gameState == 1) { drawRulesScreen(g2d, w, h); return; }
             drawPlayer(g, g2d);
             drawProjectiles(g, g2d, tilesX, tilesY);
-            drawEnemies(g, tilesX, tilesY);
+            drawEnemies(g, g2d, tilesX, tilesY);
             drawHUD(g2d, w, h);
             if (!player.alive()) drawGameOver(g2d, w, h);
             if (paused)         drawPauseOverlay(g2d, w, h);
@@ -479,11 +533,18 @@ public class Map implements KeyListener {
                     int screenY = (int) ((row - player.y % 1) * TILE_SIZE);
 
                     switch (mapGrid[mapRow][mapCol]) {
-                        case 1: g.drawImage(floorTile,screenX, screenY, TILE_SIZE, TILE_SIZE, null); break;
-                        case 2: g.drawImage(wallSide,screenX, screenY, TILE_SIZE, TILE_SIZE, null); break;
-                        case 3: g.drawImage(wallTop,screenX, screenY, TILE_SIZE, TILE_SIZE, null); break;
-                        
-
+                        case 1:
+                            if (floorTile != null) g.drawImage(floorTile, screenX, screenY, TILE_SIZE, TILE_SIZE, null);
+                            else { g.setColor(FLOOR_COLOR); g.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE); }
+                            break;
+                        case 2:
+                            if (wallSide != null) g.drawImage(wallSide, screenX, screenY, TILE_SIZE, TILE_SIZE, null);
+                            else { g.setColor(WALL_COLOR); g.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE); }
+                            break;
+                        case 3:
+                            if (wallTop != null) g.drawImage(wallTop, screenX, screenY, TILE_SIZE, TILE_SIZE, null);
+                            else { g.setColor(WALL_COLOR); g.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE); }
+                            break;
                     }
                 }
             }
@@ -505,8 +566,13 @@ public class Map implements KeyListener {
                 g.fillOval(cx, cy, 100, 100);
             }
 
-             g.drawImage(playerSprite, this.getWidth() / 2, this.getHeight() / 2,this.getWidth()/2+80,this.getHeight() / 2 + 105,playerDirection*80,0 ,playerDirection*80+80, 105,  null);
-
+            // Draw the correct directional frame from the sprite sheet.
+            // Each frame is 80px wide × 105px tall; playerDirection selects the column.
+            // 0=down, 1=right, 2=up, 3=left
+            g.drawImage(playerSprite,
+                cx, cy, cx + 80, cy + 105,                          // dest rect
+                playerDirection * 80, 0, playerDirection * 80 + 80, 105,  // src rect
+                null);
 
             player.attackAnimations.drawStab(g2d);
             player.attackAnimations.drawSwing(g2d, player.facingAngle);
@@ -545,17 +611,107 @@ public class Map implements KeyListener {
         }
 
         /**
-         * Draws all live enemies as green ovals in screen space.
-         * @param g      the graphics context to draw into
-         * @param tilesX number of tiles visible horizontally, used for world-to-screen conversion
-         * @param tilesY number of tiles visible vertically, used for world-to-screen conversion
+         * Draws all live enemies in screen space.
+         *   Melee   — solid green oval
+         *   Ranged  — blue/purple oval with a crosshair ring
+         *   Charger — orange oval; shows a charge-telegraph rectangle while winding up,
+         *             turns bright white during the actual dash
          */
-        private void drawEnemies(Graphics g, int tilesX, int tilesY) {
-            g.setColor(Color.GREEN);
+        private void drawEnemies(Graphics g, Graphics2D g2d, int tilesX, int tilesY) {
             for (Enemy enemy : enemies) {
                 int sx = (int) ((enemy.x - player.x + tilesX / 2.0) * TILE_SIZE);
                 int sy = (int) ((enemy.y - player.y + tilesY / 2.0) * TILE_SIZE);
-                g.fillOval(sx, sy, 50, 50);
+
+                if (enemy instanceof ChargerEnemy) {
+                    ChargerEnemy ce = (ChargerEnemy) enemy;
+
+                    // Telegraph rectangle while charging
+                    if (ce.isCharging()) {
+                        float prog = ce.chargeProgress();
+                        // rect extends from current position along dash direction
+                        int rectLen = (int)(prog * ChargerEnemy.CHARGE_RANGE * TILE_SIZE * 1.5);
+                        int rectW   = 18;
+
+                        AffineTransform saved = g2d.getTransform();
+                        g2d.translate(sx + 25, sy + 25);
+                        g2d.rotate(Math.atan2(ce.dashDirY, ce.dashDirX));
+                        // filled telegraph bar — fades from transparent to solid orange-red
+                        g2d.setColor(new Color(255, 80, 0, (int)(60 + 130 * prog)));
+                        g2d.fillRect(0, -rectW / 2, rectLen, rectW);
+                        // border
+                        g2d.setColor(new Color(255, 160, 0, (int)(120 + 120 * prog)));
+                        g2d.setStroke(new BasicStroke(1.5f));
+                        g2d.drawRect(0, -rectW / 2, rectLen, rectW);
+                        g2d.setTransform(saved);
+                        g2d.setStroke(new BasicStroke(1f));
+                    }
+
+                    // Body
+                    Color bodyColor = ce.isDashing()
+                        ? new Color(255, 255, 200)       // bright flash during dash
+                        : new Color(255, 140, 30);       // orange at rest / charging
+                    g.setColor(bodyColor);
+                    g.fillOval(sx, sy, 50, 50);
+
+                    // Outline
+                    g2d.setColor(new Color(200, 80, 0));
+                    g2d.setStroke(new BasicStroke(2f));
+                    g2d.drawOval(sx, sy, 50, 50);
+                    g2d.setStroke(new BasicStroke(1f));
+
+                } else if (enemy instanceof RangedEnemy) {
+                    RangedEnemy re = (RangedEnemy) enemy;
+
+                    // Draw fired projectiles
+                    g2d.setColor(new Color(80, 200, 255));
+                    for (EnemyProjectile p : re.projectiles) {
+                        int px = (int) ((p.x - player.x + tilesX / 2.0) * TILE_SIZE);
+                        int py = (int) ((p.y - player.y + tilesY / 2.0) * TILE_SIZE);
+                        // diamond shape
+                        int[] xs = { px, px + 8, px, px - 8 };
+                        int[] ys = { py - 8, py, py + 8, py };
+                        g2d.fillPolygon(xs, ys, 4);
+                        g2d.setColor(new Color(180, 240, 255));
+                        g2d.drawPolygon(xs, ys, 4);
+                        g2d.setColor(new Color(80, 200, 255));
+                    }
+
+                    // Body
+                    g.setColor(new Color(90, 80, 200));
+                    g.fillOval(sx, sy, 50, 50);
+
+                    // Outer ring (shows whether in fire range or approaching)
+                    boolean inRange = re.distToPlayer <= RangedEnemy.FIRE_RANGE;
+                    g2d.setColor(inRange ? new Color(80, 200, 255) : new Color(140, 120, 220));
+                    g2d.setStroke(new BasicStroke(2f));
+                    g2d.drawOval(sx - 5, sy - 5, 60, 60);
+                    // crosshair dots
+                    if (inRange) {
+                        g2d.fillOval(sx + 22, sy - 8, 6, 6);
+                        g2d.fillOval(sx + 22, sy + 52, 6, 6);
+                        g2d.fillOval(sx - 8, sy + 22, 6, 6);
+                        g2d.fillOval(sx + 52, sy + 22, 6, 6);
+                    }
+                    g2d.setStroke(new BasicStroke(1f));
+
+                } else if (enemy instanceof TankEnemy) {
+                    // Large dark-red oval — visually heavier than the basic enemy
+                    g.setColor(enemy.isFlashing() ? Color.WHITE : new Color(140, 20, 20));
+                    g.fillOval(sx - 10, sy - 10, 70, 70);
+                    g2d.setColor(new Color(80, 0, 0));
+                    g2d.setStroke(new BasicStroke(3f));
+                    g2d.drawOval(sx - 10, sy - 10, 70, 70);
+                    g2d.setStroke(new BasicStroke(1f));
+
+                } else {
+                    // Basic melee enemy — solid green oval
+                    g.setColor(enemy.isFlashing() ? Color.WHITE : new Color(60, 180, 60));
+                    g.fillOval(sx, sy, 50, 50);
+                    g2d.setColor(new Color(20, 120, 20));
+                    g2d.setStroke(new BasicStroke(2f));
+                    g2d.drawOval(sx, sy, 50, 50);
+                    g2d.setStroke(new BasicStroke(1f));
+                }
             }
         }
 
