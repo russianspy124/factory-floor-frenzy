@@ -134,8 +134,8 @@ class AttackAnimations {
         if (!swinging) return;
 
         // Use the grip point as the pivot to match drawSwing's visual origin
-        int gripX = playerX + (int) (Math.cos(facingAngle) * HAND_OFFSET);
-        int gripY = playerY + (int) (Math.sin(facingAngle) * HAND_OFFSET);
+        int gripX = playerX + 40 + (int) (Math.cos(facingAngle) * HAND_OFFSET);
+        int gripY = playerY + 52 + (int) (Math.sin(facingAngle) * HAND_OFFSET);
 
         for (int i = 0; i < enemies.size(); i++) {
             Enemy enemy = enemies.get(i);

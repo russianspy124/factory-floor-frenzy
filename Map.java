@@ -700,7 +700,7 @@ public class Map implements KeyListener {
             // Each frame is 80px wide × 105px tall; playerDirection selects the column.
             // 0=down, 1=right, 2=up, 3=left
             g.drawImage(playerSprite,
-                    cx, cy, cx + 80, cy + 105,                          // dest rect
+                    cx-40, cy-52, cx + 40, cy + 53,                          // dest rect
                     playerDirection * 80, 0, playerDirection * 80 + 80, 105,  // src rect
                     null);
 
@@ -906,7 +906,7 @@ public class Map implements KeyListener {
                             g2d.fillOval(sx, sy, 80, 100);
                             g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1f));
                         }
-                        g.drawImage(regularEnemySprite, sx - 40, sy - 50, 80, 100, null);
+                        g.drawImage(regularEnemySprite, sx -80 , sy -100 , 80, 100, null);
                     } else {
                         g.setColor(enemy.isFlashing() ? Color.WHITE : new Color(60, 180, 60));
                         g.fillOval(sx, sy, 50, 50);
