@@ -1,7 +1,11 @@
 import java.awt.*;
 import java.awt.geom.AffineTransform;
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
+import javax.imageio.ImageIO;
 
 /**
  * Manages the visual and hit-detection logic for the player's two melee attacks:
@@ -20,6 +24,17 @@ class AttackAnimations {
 
     /** Screen-space Y coordinate of the player's centre. Updated every frame. */
     private int playerY;
+
+    /** Scythe sprite, loaded once at construction. */
+    private final BufferedImage scytheSprite = loadSprite("spectral_scythe.png");
+
+    /** Rapier sprite, loaded once at construction. */
+    private final BufferedImage rapierSprite = loadSprite("rapier_thrust.png");
+
+    private static BufferedImage loadSprite(String filename) {
+        try { return ImageIO.read(new File(filename)); }
+        catch (IOException e) { return null; }
+    }
 
     /**
      * Creates an AttackAnimations instance anchored to the given screen position.
@@ -158,8 +173,12 @@ class AttackAnimations {
 
         g2d.translate(gripX, gripY);
         g2d.rotate(swingAngle);
-        g2d.setColor(Color.GRAY);
-        g2d.fillRect(0, -WEAPON_HEIGHT / 2, WEAPON_WIDTH, WEAPON_HEIGHT);
+        if (scytheSprite != null) {
+            g2d.drawImage(scytheSprite, 0, -WEAPON_HEIGHT / 2, WEAPON_WIDTH, WEAPON_HEIGHT, null);
+        } else {
+            g2d.setColor(Color.GRAY);
+            g2d.fillRect(0, -WEAPON_HEIGHT / 2, WEAPON_WIDTH, WEAPON_HEIGHT);
+        }
         g2d.setTransform(saved);
     }
 
@@ -232,14 +251,23 @@ class AttackAnimations {
         if (!stabActive) return;
 
         AffineTransform saved = g2d.getTransform();
-        double reach = 20 + (80 * stabProgress);
-        int tipX = playerX + (int) (Math.cos(stabAngle) * reach);
-        int tipY = playerY + (int) (Math.sin(stabAngle) * reach);
 
-        g2d.translate(tipX, tipY);
+        // Translate to player centre, rotate to face the stab direction.
+        // The sprite is drawn with x=0 at the handle (player side) extending
+        // to x=rw at the tip. Thrust animates the whole sprite forward by up
+        // to 40px so the blade visibly lunges outward.
+        int rw = 100, rh = 30;
+        double thrust = 40 * stabProgress;
+        g2d.translate(playerX, playerY);
         g2d.rotate(stabAngle);
-        g2d.setColor(new Color(0, 255, 255, 160));
-        g2d.fillRect(0, -15, 100, 30);
+
+        if (rapierSprite != null) {
+            g2d.drawImage(rapierSprite, (int) thrust, -rh / 2, rw, rh, null);
+        } else {
+            g2d.setColor(new Color(0, 255, 255, 160));
+            g2d.fillRect((int) thrust, -rh / 2, rw, rh);
+        }
+
         g2d.setTransform(saved);
     }
 

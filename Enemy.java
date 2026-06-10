@@ -45,6 +45,32 @@ class Enemy extends Damageable {
     Hitbox hitbox = new Hitbox(0, 0, 100, 100);
 
     /**
+     * Ticks elapsed since last frame change, used for sprite animation.
+     */
+    int animTick = 0;
+
+    /**
+     * Current sprite frame index.
+     */
+    int animFrame = 0;
+
+    /**
+     * Ticks per animation frame (controls animation speed).
+     */
+    static final int ANIM_SPEED = 8;
+
+    /**
+     * When true, the renderer plays the attack animation instead of the walk cycle.
+     * Set by the enemy's move() logic when it deals or is about to deal damage.
+     */
+    boolean isAttacking = false;
+
+    /**
+     * Ticks remaining in the current attack animation before returning to walk cycle.
+     */
+    int attackAnimTicks = 0;
+
+    /**
      * Creates a new enemy at the given world-space position.
      *
      * @param hp starting hit points
@@ -69,6 +95,16 @@ class Enemy extends Damageable {
         moveTowardPlayer(playerX, playerY);
         separateFromOtherEnemies(allEnemies);
         hitbox.setPosition(x - 25, y - 25);
+
+        // Trigger attack anim when close enough to deal contact damage
+        if (distToPlayer <= CONTACT_DIST + 0.3) {
+            isAttacking = true;
+            attackAnimTicks = 30;
+        } else if (attackAnimTicks > 0) {
+            attackAnimTicks--;
+        } else {
+            isAttacking = false;
+        }
     }
 
     /**

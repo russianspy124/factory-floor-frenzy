@@ -126,12 +126,17 @@ class ChargerEnemy extends Enemy {
                     cooldownTicks = COOLDOWN_TICKS;
                     state = State.COOLDOWN;
                 }
+                isAttacking = true;
+                attackAnimTicks = 20;
                 break;
 
             case COOLDOWN:
                 if (--cooldownTicks <= 0) state = State.APPROACH;
                 break;
         }
+
+        if (attackAnimTicks > 0) attackAnimTicks--;
+        else if (state != State.DASHING) isAttacking = false;
 
         separateFromEnemies(allEnemies);
         hitbox.setPosition(x - 25, y - 25);

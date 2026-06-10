@@ -548,6 +548,16 @@ public class Map implements KeyListener {
      */
     class DrawPanel extends JPanel {
 
+        // --- Enemy and projectile sprites ---
+        BufferedImage tankPunchLeft  = loadImage("tank-punch-left.png");
+        BufferedImage tankPunchRight = loadImage("tank-punch-right.png");
+        BufferedImage chargeLeft     = loadImage("charge-left.png");
+        BufferedImage chargeRight    = loadImage("charge-right.png");
+        BufferedImage smelterSprite  = loadImage("ceo.png");
+        BufferedImage flameDiscSprite = loadImage("flame_disc.png");
+        BufferedImage rapierSprite = loadImage("rapier_thrust.png");
+        BufferedImage regularEnemySprite = loadImage("regular-enemy.png");
+
         /**
          * Fallback tile colour for floor tiles (tile value 1) if sprite is missing.
          */
@@ -713,31 +723,60 @@ public class Map implements KeyListener {
                     AffineTransform saved = g2d.getTransform();
                     g2d.translate(sx, sy);
                     g2d.rotate(p.rotation);
-                    g2d.setColor(Color.ORANGE);
-                    g2d.fillRect(-20, -20, 40, 40);
+                    if (flameDiscSprite != null) {
+                        // Draw the flame disc sprite centred on the projectile
+                        int dw = 45, dh = 45;
+                        g2d.drawImage(flameDiscSprite, -dw / 2, -dh / 2, dw, dh, null);
+                    } else {
+                        g2d.setColor(Color.ORANGE);
+                        g2d.fillRect(-20, -20, 40, 40);
+                    }
                     g2d.setTransform(saved);
                 } else {
-                    g.setColor(Color.RED);
-                    Polygon bolt = new Polygon();
-                    bolt.addPoint(sx, sy);
-                    bolt.addPoint((int) (sx - p.vy * 25), (int) (sy + p.vx * 25));
-                    bolt.addPoint((int) (sx + p.vy * 25), (int) (sy - p.vx * 25));
-                    g.drawPolygon(bolt);
+                    // Rapier bolt — sprite starts at projectile position, tip points forward
+                    double angle = Math.atan2(p.vy, p.vx);
+                    AffineTransform saved = g2d.getTransform();
+                    g2d.translate(sx, sy);
+                    g2d.rotate(angle);
+                    if (rapierSprite != null) {
+                        int rw = 100, rh = 30;
+                        g2d.drawImage(rapierSprite, -rw, -rh / 2, rw, rh, null);
+                    } else {
+                        g2d.setColor(Color.RED);
+                        Polygon bolt = new Polygon();
+                        bolt.addPoint(0, 0);
+                        bolt.addPoint(-25, -10);
+                        bolt.addPoint(-25, 10);
+                        g2d.fillPolygon(bolt);
+                    }
+                    g2d.setTransform(saved);
                 }
             }
         }
 
         /**
-         * Draws all live enemies in screen space.
-         * Melee   — solid green oval
-         * Ranged  — blue/purple oval with a crosshair ring
-         * Charger — orange oval; shows a charge-telegraph rectangle while winding up,
-         * turns bright white during the actual dash
+         * Draws all live enemies in screen space using their sprite sheets.
+         * Tank    — tank-punch-left/right sprite sheet (7 frames, 150×140 px per frame)
+         * Charger — charge-left/right sprite sheet (3 frames, 120×120 px per frame)
+         * Ranged  — smelter sprite sheet (4 frames, 45×230 total → each 45×57.5 but
+         *           stored as 180×230: 4 columns of 45px wide)
+         *
+         * @param g      the graphics context for polygon/oval fallbacks
+         * @param g2d    the 2D context for affine transforms and outlines
+         * @param tilesX number of tiles visible horizontally
+         * @param tilesY number of tiles visible vertically
          */
         private void drawEnemies(Graphics g, Graphics2D g2d, int tilesX, int tilesY) {
             for (Enemy enemy : enemies) {
                 int sx = (int) ((enemy.x - player.x + tilesX / 2.0) * TILE_SIZE);
                 int sy = (int) ((enemy.y - player.y + tilesY / 2.0) * TILE_SIZE);
+
+                // Advance animation frame
+                enemy.animTick++;
+                if (enemy.animTick >= Enemy.ANIM_SPEED) {
+                    enemy.animTick = 0;
+                    enemy.animFrame++;
+                }
 
                 if (enemy instanceof ChargerEnemy) {
                     ChargerEnemy ce = (ChargerEnemy) enemy;
@@ -745,17 +784,13 @@ public class Map implements KeyListener {
                     // Telegraph rectangle while charging
                     if (ce.isCharging()) {
                         float prog = ce.chargeProgress();
-                        // rect extends from current position along dash direction
                         int rectLen = (int) (prog * ChargerEnemy.CHARGE_RANGE * TILE_SIZE * 1.5);
                         int rectW = 18;
-
                         AffineTransform saved = g2d.getTransform();
                         g2d.translate(sx + 25, sy + 25);
                         g2d.rotate(Math.atan2(ce.dashDirY, ce.dashDirX));
-                        // filled telegraph bar — fades from transparent to solid orange-red
                         g2d.setColor(new Color(255, 80, 0, (int) (60 + 130 * prog)));
                         g2d.fillRect(0, -rectW / 2, rectLen, rectW);
-                        // border
                         g2d.setColor(new Color(255, 160, 0, (int) (120 + 120 * prog)));
                         g2d.setStroke(new BasicStroke(1.5f));
                         g2d.drawRect(0, -rectW / 2, rectLen, rectW);
@@ -763,18 +798,31 @@ public class Map implements KeyListener {
                         g2d.setStroke(new BasicStroke(1f));
                     }
 
-                    // Body
-                    Color bodyColor = ce.isDashing()
-                            ? new Color(255, 255, 200)       // bright flash during dash
-                            : new Color(255, 140, 30);       // orange at rest / charging
-                    g.setColor(bodyColor);
-                    g.fillOval(sx, sy, 50, 50);
+                    // Choose left or right sheet based on player relative position
+                    boolean facingLeft = player.x < ce.x;
+                    BufferedImage sheet = facingLeft ? chargeLeft : chargeRight;
 
-                    // Outline
-                    g2d.setColor(new Color(200, 80, 0));
-                    g2d.setStroke(new BasicStroke(2f));
-                    g2d.drawOval(sx, sy, 50, 50);
-                    g2d.setStroke(new BasicStroke(1f));
+                    // 3 frames: APPROACH=0, CHARGING=1, DASHING=2
+                    int frame;
+                    switch (ce.state) {
+                        case CHARGING: frame = 1; break;
+                        case DASHING:  frame = 2; break;
+                        default:       frame = ce.animFrame % 3; break;
+                    }
+
+                    // sheet is 360×120 (3 frames × 120px wide, 120px tall)
+                    int fw = 120, fh = 120;
+                    if (sheet != null) {
+                        g.drawImage(sheet,
+                            sx - fw / 2, sy - fh / 2, sx + fw / 2, sy + fh / 2,
+                            frame * fw, 0, frame * fw + fw, fh,
+                            null);
+                    } else {
+                        // Fallback
+                        Color bodyColor = ce.isDashing() ? new Color(255, 255, 200) : new Color(255, 140, 30);
+                        g.setColor(bodyColor);
+                        g.fillOval(sx, sy, 50, 50);
+                    }
 
                 } else if (enemy instanceof RangedEnemy) {
                     RangedEnemy re = (RangedEnemy) enemy;
@@ -784,7 +832,6 @@ public class Map implements KeyListener {
                     for (EnemyProjectile p : re.projectiles) {
                         int px = (int) ((p.x - player.x + tilesX / 2.0) * TILE_SIZE);
                         int py = (int) ((p.y - player.y + tilesY / 2.0) * TILE_SIZE);
-                        // diamond shape
                         int[] xs = {px, px + 8, px, px - 8};
                         int[] ys = {py - 8, py, py + 8, py};
                         g2d.fillPolygon(xs, ys, 4);
@@ -793,41 +840,77 @@ public class Map implements KeyListener {
                         g2d.setColor(new Color(80, 200, 255));
                     }
 
-                    // Body
-                    g.setColor(new Color(90, 80, 200));
-                    g.fillOval(sx, sy, 50, 50);
-
-                    // Outer ring (shows whether in fire range or approaching)
-                    boolean inRange = re.distToPlayer <= RangedEnemy.FIRE_RANGE;
-                    g2d.setColor(inRange ? new Color(80, 200, 255) : new Color(140, 120, 220));
-                    g2d.setStroke(new BasicStroke(2f));
-                    g2d.drawOval(sx - 5, sy - 5, 60, 60);
-                    // crosshair dots
-                    if (inRange) {
-                        g2d.fillOval(sx + 22, sy - 8, 6, 6);
-                        g2d.fillOval(sx + 22, sy + 52, 6, 6);
-                        g2d.fillOval(sx - 8, sy + 22, 6, 6);
-                        g2d.fillOval(sx + 52, sy + 22, 6, 6);
+                    // smelter.png: 180×230 → 4 frames, each 45×230 wide... 
+                    // Actually smelter is a single character with 4 directional frames side by side
+                    // 180/4 = 45px wide, 230px tall per frame
+                    if (smelterSprite != null) {
+                        int drawW = 60, drawH = 92; // maintain 150:230 aspect ratio
+                        if (enemy.isFlashing()) {
+                            g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.7f));
+                            g2d.setColor(Color.WHITE);
+                            g2d.fillRect(sx - drawW / 2, sy - drawH / 2, drawW, drawH);
+                            g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1f));
+                        }
+                        g.drawImage(smelterSprite, sx - drawW / 2, sy - drawH / 2, drawW, drawH, null);
+                    } else {
+                        g.setColor(new Color(90, 80, 200));
+                        g.fillOval(sx, sy, 50, 50);
+                        boolean inRange = re.distToPlayer <= RangedEnemy.FIRE_RANGE;
+                        g2d.setColor(inRange ? new Color(80, 200, 255) : new Color(140, 120, 220));
+                        g2d.setStroke(new BasicStroke(2f));
+                        g2d.drawOval(sx - 5, sy - 5, 60, 60);
+                        g2d.setStroke(new BasicStroke(1f));
                     }
-                    g2d.setStroke(new BasicStroke(1f));
 
                 } else if (enemy instanceof TankEnemy) {
-                    // Large dark-red oval — visually heavier than the basic enemy
-                    g.setColor(enemy.isFlashing() ? Color.WHITE : new Color(140, 20, 20));
-                    g.fillOval(sx - 10, sy - 10, 70, 70);
-                    g2d.setColor(new Color(80, 0, 0));
-                    g2d.setStroke(new BasicStroke(3f));
-                    g2d.drawOval(sx - 10, sy - 10, 70, 70);
-                    g2d.setStroke(new BasicStroke(1f));
+                    // tank-punch-left/right: 1050×140 → 7 frames, each 150×140
+                    boolean facingLeft = player.x < enemy.x;
+                    BufferedImage sheet = facingLeft ? tankPunchLeft : tankPunchRight;
+                    if (sheet != null) {
+                        // Frames 0-3 = walk cycle, frames 4-6 = punch attack
+                        int frame;
+                        if (enemy.isAttacking) {
+                            frame = 4 + (enemy.animFrame % 3);
+                        } else {
+                            frame = enemy.animFrame % 4;
+                        }
+                        int fw = 150, fh = 140;
+                        int drawW = 100, drawH = 93;
+                        // Flash white on damage
+                        if (enemy.isFlashing()) {
+                            // Draw with white composite
+                            g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.7f));
+                            g2d.setColor(Color.WHITE);
+                            g2d.fillOval(sx - drawW / 2, sy - drawH / 2, drawW, drawH);
+                            g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1f));
+                        }
+                        g.drawImage(sheet,
+                            sx - drawW / 2, sy - drawH / 2, sx + drawW / 2, sy + drawH / 2,
+                            frame * fw, 0, frame * fw + fw, fh,
+                            null);
+                    } else {
+                        g.setColor(enemy.isFlashing() ? Color.WHITE : new Color(140, 20, 20));
+                        g.fillOval(sx - 10, sy - 10, 70, 70);
+                    }
 
                 } else {
-                    // Basic melee enemy — solid green oval
-                    g.setColor(enemy.isFlashing() ? Color.WHITE : new Color(60, 180, 60));
-                    g.fillOval(sx, sy, 50, 50);
-                    g2d.setColor(new Color(20, 120, 20));
-                    g2d.setStroke(new BasicStroke(2f));
-                    g2d.drawOval(sx, sy, 50, 50);
-                    g2d.setStroke(new BasicStroke(1f));
+                    // Basic melee enemy
+                    if (regularEnemySprite != null) {
+                        if (enemy.isFlashing()) {
+                            g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.7f));
+                            g2d.setColor(Color.WHITE);
+                            g2d.fillOval(sx, sy, 80, 100);
+                            g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1f));
+                        }
+                        g.drawImage(regularEnemySprite, sx - 40, sy - 50, 80, 100, null);
+                    } else {
+                        g.setColor(enemy.isFlashing() ? Color.WHITE : new Color(60, 180, 60));
+                        g.fillOval(sx, sy, 50, 50);
+                        g2d.setColor(new Color(20, 120, 20));
+                        g2d.setStroke(new BasicStroke(2f));
+                        g2d.drawOval(sx, sy, 50, 50);
+                        g2d.setStroke(new BasicStroke(1f));
+                    }
                 }
             }
         }

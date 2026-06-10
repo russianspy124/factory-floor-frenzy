@@ -35,6 +35,16 @@ class TankEnemy extends Enemy {
 
         separateFromEnemies(allEnemies);
         hitbox.setPosition(x - 25, y - 25);
+
+        // Trigger attack animation when close to the player
+        if (distToPlayer <= 0.6) {
+            isAttacking = true;
+            attackAnimTicks = 40;
+        } else if (attackAnimTicks > 0) {
+            attackAnimTicks--;
+        } else {
+            isAttacking = false;
+        }
     }
 
     private void separateFromEnemies(ArrayList<Enemy> allEnemies) {

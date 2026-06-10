@@ -71,8 +71,13 @@ class RangedEnemy extends Enemy {
             } else {
                 fireAt(playerX, playerY);
                 fireCooldown = FIRE_COOLDOWN;
+                isAttacking = true;
+                attackAnimTicks = 50;
             }
         }
+
+        if (attackAnimTicks > 0) attackAnimTicks--;
+        else isAttacking = false;
 
         separateFromEnemies(allEnemies);
         hitbox.setPosition(x - 25, y - 25);
