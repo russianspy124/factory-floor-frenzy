@@ -559,7 +559,7 @@ public class Map implements KeyListener {
         BufferedImage chargeRight    = loadImage("charge-right.png");
         BufferedImage smelterSprite  = loadImage("ceo.png");
         BufferedImage flameDiscSprite = loadImage("flame_disc.png");
-        BufferedImage rapierSprite = loadImage("rapier_thrust.png");
+        BufferedImage rapierSprite = loadImage("rapierThrust.png");
         BufferedImage regularEnemySprite = loadImage("regular-enemy.png");
 
         /**
@@ -742,17 +742,17 @@ public class Map implements KeyListener {
                     AffineTransform saved = g2d.getTransform();
                     g2d.translate(sx, sy);
                     g2d.rotate(angle);
-                    if (rapierSprite != null) {
+                    // if (rapierSprite != null) {
                         int rw = 100, rh = 30;
                         g2d.drawImage(rapierSprite, -rw, -rh / 2, rw, rh, null);
-                    } else {
-                        g2d.setColor(Color.RED);
-                        Polygon bolt = new Polygon();
-                        bolt.addPoint(0, 0);
-                        bolt.addPoint(-25, -10);
-                        bolt.addPoint(-25, 10);
-                        g2d.fillPolygon(bolt);
-                    }
+                //}else {
+                        // g2d.setColor(Color.RED);
+                        // Polygon bolt = new Polygon();
+                        // bolt.addPoint(0, 0);
+                        // bolt.addPoint(-25, -10);
+                        // bolt.addPoint(-25, 10);
+                        // g2d.fillPolygon(bolt);
+                    //}
                     g2d.setTransform(saved);
                 }
             }

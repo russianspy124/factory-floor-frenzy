@@ -26,10 +26,10 @@ class AttackAnimations {
     private int playerY;
 
     /** Scythe sprite, loaded once at construction. */
-    private final BufferedImage scytheSprite = loadSprite("spectral_scythe.png");
+    private final BufferedImage scytheSprite = loadSprite("scythe.png");
 
     /** Rapier sprite, loaded once at construction. */
-    private final BufferedImage rapierSprite = loadSprite("rapier_thrust.png");
+    private final BufferedImage rapierSprite = loadSprite("rapierThrust.png");
 
     private static BufferedImage loadSprite(String filename) {
         try { return ImageIO.read(new File(filename)); }
@@ -249,7 +249,6 @@ class AttackAnimations {
      */
     void drawStab(Graphics2D g2d) {
         if (!stabActive) return;
-
         AffineTransform saved = g2d.getTransform();
 
         // Translate to player centre, rotate to face the stab direction.
@@ -263,6 +262,7 @@ class AttackAnimations {
 
         if (rapierSprite != null) {
             g2d.drawImage(rapierSprite, (int) thrust, -rh / 2, rw, rh, null);
+            
         } else {
             g2d.setColor(new Color(0, 255, 255, 160));
             g2d.fillRect((int) thrust, -rh / 2, rw, rh);

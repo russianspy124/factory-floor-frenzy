@@ -146,7 +146,7 @@ class Player extends Damageable {
      * @return {@code true} if the tile at (wx, wy) is walkable
      */
     private boolean walkable(int[][] map, double wx, double wy) {
-        return map[(int) wy][(int) wx] == 1;
+        return map[(int) wy][(int) wx] == 1||map[(int) wy][(int) wx] == 2;
     }
 
     // -------------------------------------------------------------------------
