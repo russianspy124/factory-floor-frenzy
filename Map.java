@@ -428,6 +428,10 @@ public class Map implements KeyListener {
                 gameState = 1;
                 return;
             }
+            if (e.getKeyCode() == KeyEvent.VK_L) {
+                System.exit(0);
+                return;
+            }
         }
         if (gameState == 1) {
             if (e.getKeyCode() == KeyEvent.VK_K || e.getKeyCode() == KeyEvent.VK_J) {
@@ -1271,8 +1275,9 @@ public class Map implements KeyListener {
             // pulsing button prompts
             float pulse = (float) (0.75 + 0.25 * Math.sin(screenTick * 0.08));
             int btnY = t2y + 80;
-            drawMenuButton(g2d, w / 2 - 160, btnY, "J", "PLAY", pulse, new Color(220, 100, 30));
-            drawMenuButton(g2d, w / 2 + 20, btnY, "K", "RULES", 1.0f, new Color(130, 130, 130));
+            drawMenuButton(g2d, w / 2 - 200, btnY, "J", "PLAY", pulse, new Color(220, 100, 30));
+            drawMenuButton(g2d, w / 2 - 20, btnY, "K", "RULES", 1.0f, new Color(130, 130, 130));
+            drawMenuButton(g2d, w / 2 + 160, btnY, "L", "QUIT", 1.0f, new Color(160, 50, 50));
 
             // hint footer
             g2d.setFont(new Font("Monospaced", Font.PLAIN, 11));

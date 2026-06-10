@@ -261,13 +261,7 @@ class Player extends Damageable {
         facingAngle        = Math.atan2(closest.y - y, closest.x - x);
 
         switch (weaponChoice) {
-            case 0: // Rapier — fast bolt fired directly at the nearest enemy
-                double rapierSpeed = 0.3;
-                projectiles.add(new Projectile(
-                    x, y,
-                    (closest.x - x) / closestDist * rapierSpeed,
-                    (closest.y - y) / closestDist * rapierSpeed
-                ));
+            case 0: // Rapier — melee stab toward the nearest enemy
                 attackAnimations.startStab(facingAngle);
                 attackCooldown = 100;
                 break;
@@ -306,7 +300,7 @@ class Player extends Damageable {
         attackAnimations.updateSwing();
         attackAnimations.updateStab();
 
-        if (attackAnimations.isSwinging() && !enemies.isEmpty()) {
+        if (!enemies.isEmpty() && (attackAnimations.isSwinging() || attackAnimations.isStabbing())) {
             int[] screenX = new int[enemies.size()];
             int[] screenY = new int[enemies.size()];
             for (int i = 0; i < enemies.size(); i++) {
@@ -314,7 +308,12 @@ class Player extends Damageable {
                 screenX[i] = (int) ((e.x - x + tilesX / 2.0) * tileSize);
                 screenY[i] = (int) ((e.y - y + tilesY / 2.0) * tileSize);
             }
-            attackAnimations.checkSwingHits(enemies, screenX, screenY, 15, facingAngle);
+            if (attackAnimations.isSwinging()) {
+                attackAnimations.checkSwingHits(enemies, screenX, screenY, 15, facingAngle);
+            }
+            if (attackAnimations.isStabbing()) {
+                attackAnimations.checkStabHits(enemies, screenX, screenY, 20);
+            }
         }
     }
 

@@ -277,6 +277,39 @@ class AttackAnimations {
      */
     boolean isStabbing() { return stabActive; }
 
+    /**
+     * Checks each enemy against the current stab and applies damage to any that
+     * fall within the blade's reach. Only tests during the active thrust phase
+     * (stabProgress > 0). Each enemy can only be hit once per stab.
+     * @param enemies      the live enemy list
+     * @param enemyScreenX screen-space X for each enemy (parallel to {@code enemies})
+     * @param enemyScreenY screen-space Y for each enemy (parallel to {@code enemies})
+     * @param damage       HP to subtract from each enemy that is struck
+     */
+    void checkStabHits(ArrayList<Enemy> enemies, int[] enemyScreenX, int[] enemyScreenY, int damage) {
+        if (!stabActive || stabProgress <= 0f) return;
+
+        // Mirror drawStab's geometry: blade occupies x=[thrust, thrust+rw] along stabAngle.
+        // Use the tip (furthest point) as the hit origin with a generous radius.
+        int rw = 100;
+        double thrust = 40 * stabProgress;
+        double tipDist = thrust + rw;
+        int tipX = playerX + (int) (Math.cos(stabAngle) * tipDist);
+        int tipY = playerY + (int) (Math.sin(stabAngle) * tipDist);
+
+        // Hit radius covers roughly the front half of the blade
+        int hitRadius = rw / 2 + 20;
+
+        for (int i = 0; i < enemies.size(); i++) {
+            Enemy enemy = enemies.get(i);
+            int dx = enemyScreenX[i] - tipX;
+            int dy = enemyScreenY[i] - tipY;
+            if (dx * dx + dy * dy <= hitRadius * hitRadius) {
+                enemy.takeDamage(damage);
+            }
+        }
+    }
+
     // -------------------------------------------------------------------------
     // Shared
     // -------------------------------------------------------------------------
